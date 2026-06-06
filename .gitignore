@@ -1,0 +1,21 @@
+# ビルド成果物
+build/
+
+# 生成データ（ローカルで再生成）
+# web/tiles/  ← generate_tiles.py または download_tiles.py で生成 (~7 GB)
+web/tiles/
+# map/        ← JAXA AW3D30 生データ（手動でダウンロード）
+map/
+
+# ランタイムファイル
+*.log
+*.lock
+
+# Claude Code 内部
+.claude/
+
+# OS / エディタ
+.DS_Store
+Thumbs.db
+*.swp
+*~
