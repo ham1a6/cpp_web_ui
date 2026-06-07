@@ -214,6 +214,45 @@ struct MapServer::Impl {
                 });
         });
 
+        // POST /api/symbols   → setSymbol(label, lat, lon, type)
+        svr.Post("/api/symbols", [this](const httplib::Request& req, httplib::Response& res) {
+            auto body = json::parse(req.body, nullptr, false);
+            if (body.is_discarded() || !body.contains("label")) {
+                res.status = 400;
+                res.set_content(R"({"error":"label required"})", "application/json");
+                return;
+            }
+            const std::string lbl  = body["label"].get<std::string>();
+            const double      lat  = body.value("lat",  0.0);
+            const double      lon  = body.value("lon",  0.0);
+            const std::string type = body.value("type", "unknown");
+            if (lbl.empty() || lbl.size() > 31) {
+                res.status = 400;
+                res.set_content(R"({"error":"label must be 1-31 chars"})", "application/json");
+                return;
+            }
+            { std::lock_guard lk(sym_mu);
+              symbols[lbl] = {{"lat", lat}, {"lon", lon}, {"label", lbl}, {"type", type}}; }
+            broadcastSnapshot();
+            res.set_content("{}", "application/json");
+        });
+
+        // DELETE /api/symbols          → clearSymbols()   (exact path first)
+        svr.Delete("/api/symbols", [this](const httplib::Request&, httplib::Response& res) {
+            { std::lock_guard lk(sym_mu); symbols.clear(); shm_labels.clear(); }
+            broadcastSnapshot();
+            res.set_content("{}", "application/json");
+        });
+
+        // DELETE /api/symbols/:label   → removeSymbol(label)
+        svr.Delete(R"(/api/symbols/([^/]+))",
+                   [this](const httplib::Request& req, httplib::Response& res) {
+            const std::string lbl = req.matches[1];
+            { std::lock_guard lk(sym_mu); symbols.erase(lbl); shm_labels.erase(lbl); }
+            broadcastSnapshot();
+            res.set_content("{}", "application/json");
+        });
+
         // Static file serving
         svr.Get("/.*", [this](const httplib::Request& req, httplib::Response& res) {
             if (web_root.empty()) {

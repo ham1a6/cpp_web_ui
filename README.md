@@ -310,6 +310,9 @@ void clearSymbols();
 | `GET` | `/api/config` | `MapConfig` の地図設定を JSON で返す。`app.js` が起動時に取得 |
 | `GET` | `/api/positions` | 現在のシンボル一覧を JSON 配列で返す (一発取得用) |
 | `GET` | `/events` | Server-Sent Events ストリーム。シンボル変更のたびに全量をプッシュ |
+| `POST` | `/api/symbols` | `setSymbol(label, lat, lon, type)` を呼び出す。ボディ: `{"label":"Alpha","lat":35.69,"lon":139.69,"type":"friendly"}` |
+| `DELETE` | `/api/symbols` | `clearSymbols()` を呼び出す（全削除） |
+| `DELETE` | `/api/symbols/:label` | `removeSymbol(label)` を呼び出す |
 | `GET` | `/tiles/{z}/{x}/{y}.png` | タイル PNG。`Cache-Control: public, max-age=300` + ETag |
 | `GET` | `/<その他>` | `web/` 以下の静的ファイルを返す。`Cache-Control: no-cache` + ETag |
 
@@ -502,13 +505,28 @@ python3 scripts/download_tiles.py
 
 ## フロントエンド
 
+### 画面レイアウト
+
+3 カラム構成です。
+
+```
+┌────────────┬──────────────────────────┬────────────┐
+│   VAB      │          Map             │  Status    │
+│  (220px)   │        (flex:1)          │  (220px)   │
+│            │                          │            │
+│ setSymbol  │   Leaflet.js + Tiles     │ ● SSE接続中│
+│ removeSymbol│                         │ 15 symbols │
+│ clearSymbols│                         │ [list]     │
+└────────────┴──────────────────────────┴────────────┘
+```
+
 ### 構成
 
 ```
 web/
-  index.html      ← シングルページ
-  app.js          ← Leaflet 初期化 + SSE クライアント
-  style.css       ← レイアウト・シンボルスタイル
+  index.html      ← 3 カラムレイアウト (VAB | Map | Status)
+  app.js          ← Leaflet 初期化 + SSE クライアント + VAB ハンドラ
+  style.css       ← Flexbox レイアウト・シンボルスタイル
   lib/
     leaflet.js    ← Leaflet 1.9.4 (バンドル)
     leaflet.css
@@ -523,12 +541,23 @@ index.html 読み込み
            ├─ GET /api/config         ← MapConfig の地図設定を取得
            ├─ L.map().setView(…)      ← 地図を初期化
            ├─ L.tileLayer(…).addTo()  ← タイルレイヤーを追加
+           ├─ VAB ボタンイベント登録  ← POST/DELETE /api/symbols
            └─ connect()
                 └─ new EventSource('/events')
                        ├─ onopen    → "SSE 接続中" 表示
                        ├─ onmessage → シンボルを地図に反映
                        └─ onerror   → 3 秒後に再接続
 ```
+
+### VAB（Variable Action Bar）
+
+左パネルから直接 C++ API メソッドを呼び出せます。
+
+| VAB ボタン | 呼び出す REST API | C++ メソッド相当 |
+|---|---|---|
+| `setSymbol()` | `POST /api/symbols` | `MapServer::setSymbol()` |
+| `removeSymbol()` | `DELETE /api/symbols/:label` | `MapServer::removeSymbol()` |
+| `clearSymbols()` | `DELETE /api/symbols` | `MapServer::clearSymbols()` |
 
 ### シンボル種別とスタイル
 
@@ -541,7 +570,7 @@ index.html 読み込み
 
 シンボルは `label` 先頭 2 文字のイニシャルを円形アイコンで表示します。
 
-### サイドバー
+### ステータスパネル
 
 - 接続状態インジケーター（SSE 接続中 / 再接続中）
 - シンボル総数カウント

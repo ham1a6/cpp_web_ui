@@ -42,6 +42,16 @@ C++ で言えば:
 
 ## 2. `index.html` — ページの骨格
 
+画面は 3 列構成です。
+
+```
+┌────────────┬──────────────────────────┬────────────┐
+│  #vab      │         #map             │ #status-   │
+│  (VAB)     │       (地図エリア)         │  panel     │
+│  220px     │        flex: 1           │  220px     │
+└────────────┴──────────────────────────┴────────────┘
+```
+
 ```html
 <!DOCTYPE html>              <!-- HTML5 文書であることを宣言 -->
 <html lang="ja">
@@ -49,17 +59,69 @@ C++ で言えば:
   <!-- ページ設定（画面に表示されない） -->
   <meta charset="UTF-8">                              <!-- 文字コード -->
   <meta name="viewport" content="width=device-width"> <!-- スマホ対応 -->
-  <title>POSIX SHM Map Demo</title>                   <!-- タブに出るタイトル -->
+  <title>Map</title>                                   <!-- タブに出るタイトル -->
 
   <!-- CSS ファイルを読み込む（#include に相当） -->
   <link rel="stylesheet" href="lib/leaflet.css"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <!-- 画面に表示される要素 -->
 
-  <div id="sidebar">               <!-- 左サイドバー -->
-    <h2>Map Symbol Demo</h2>
+  <!-- 左: VAB (Variable Action Bar) ─ C++ のメソッドをボタンで呼ぶ -->
+  <div id="vab">
+    <h2>VAB</h2>
+
+    <!-- setSymbol() の入力フォーム -->
+    <section class="vab-section">
+      <h3>setSymbol()</h3>
+      <label class="vab-row">
+        <span>label</span>
+        <input id="vab-label" type="text" placeholder="Alpha" maxlength="31">
+      </label>
+      <label class="vab-row">
+        <span>lat</span>
+        <input id="vab-lat" type="number" step="0.001" value="35.690">
+      </label>
+      <label class="vab-row">
+        <span>lon</span>
+        <input id="vab-lon" type="number" step="0.001" value="139.692">
+      </label>
+      <label class="vab-row">
+        <span>type</span>
+        <select id="vab-type">
+          <option value="friendly">friendly</option>
+          <option value="enemy">enemy</option>
+          <option value="neutral">neutral</option>
+          <option value="unknown">unknown</option>
+        </select>
+      </label>
+      <button class="vab-btn" id="vab-set-btn">setSymbol()</button>
+    </section>
+
+    <!-- removeSymbol() の入力フォーム -->
+    <section class="vab-section">
+      <h3>removeSymbol()</h3>
+      <label class="vab-row">
+        <span>label</span>
+        <input id="vab-rm-label" type="text" placeholder="Alpha" maxlength="31">
+      </label>
+      <button class="vab-btn vab-btn-danger" id="vab-rm-btn">removeSymbol()</button>
+    </section>
+
+    <!-- clearSymbols() ボタン -->
+    <section class="vab-section">
+      <button class="vab-btn vab-btn-danger" id="vab-clear-btn">clearSymbols()</button>
+    </section>
+
+    <div id="vab-feedback"></div>   <!-- 操作結果（OK / Error）を表示 -->
+  </div>
+
+  <!-- 中央: 地図エリア（Leaflet がここを使う） -->
+  <div id="map"></div>
+
+  <!-- 右: ステータスパネル -->
+  <div id="status-panel">
+    <h2>Status</h2>
     <div id="status-bar">
       <span id="conn-indicator" class="dot disconnected"></span>
       <span id="conn-label">接続中...</span>
@@ -67,8 +129,6 @@ C++ で言えば:
     <div id="symbol-count">シンボル数: <strong id="count">0</strong></div>
     <ul id="symbol-list"></ul>     <!-- JS が動的にリストを追加する -->
   </div>
-
-  <div id="map"></div>             <!-- 地図エリア（Leaflet がここを使う） -->
 
   <!-- JS ファイルを読み込む（body の最後で読むのが定番） -->
   <script src="lib/leaflet.js"></script>   <!-- Leaflet ライブラリ（先に読む） -->
@@ -86,6 +146,12 @@ C++ で言えば:
 // C++ イメージ: id は変数名のようなもの
 auto* map_div = document.getElementById("map");  // 要素を取得
 ```
+
+### `<section>` と `<label>` について
+
+`<section>` は関連する要素のグループを表すタグです。VAB では各メソッドのフォームを 1 つの section に入れています。
+
+`<label>` は入力フィールドの説明文と対応する `<input>` をセットにします。ラベルをクリックすると対応する入力フィールドがフォーカスされます。
 
 ---
 
@@ -116,17 +182,29 @@ body {
   height: 100vh;   /* 画面の高さいっぱい (viewport height) */
 }
 
-#sidebar {
-  width: 240px;    /* 固定幅 */
+/* 左・右パネルは固定幅 */
+#vab, #status-panel {
+  width: 220px;
+  min-width: 220px;
 }
 
+/* 地図は残りの幅をすべて占有 */
 #map {
-  flex: 1;         /* 残りの幅をすべて使う */
+  flex: 1;         /* 余ったスペースをすべて自分に割り当てる */
 }
 ```
 
 `display: flex` は「子要素を柔軟に配置するモード」です。  
 `flex: 1` は「余ったスペースをすべて自分に割り当てる」という意味です。
+
+3 カラムの配置イメージ:
+
+```
+body (display: flex)
+├── #vab         (width: 220px)    ← 固定幅
+├── #map         (flex: 1)         ← 残り全部
+└── #status-panel (width: 220px)   ← 固定幅
+```
 
 ### 接続状態インジケーター（丸いドット）
 
@@ -450,6 +528,103 @@ const str = JSON.stringify(obj);  // '{"lat":35.69,"lon":139.69}'
 
 ---
 
+### 4-13. VAB — `apiCall()` ヘルパーとボタン
+
+VAB（Variable Action Bar）は、ブラウザから C++ の `MapServer` メソッドを呼び出すためのパネルです。  
+各ボタンが `fetch()` で REST API を叩き、C++ 側のメソッドが実行されます。
+
+```
+VAB ボタン           REST API              C++ メソッド
+─────────────────────────────────────────────────────
+setSymbol()    →  POST /api/symbols   →  MapServer::setSymbol()
+removeSymbol() →  DELETE /api/symbols/:label → MapServer::removeSymbol()
+clearSymbols() →  DELETE /api/symbols →  MapServer::clearSymbols()
+```
+
+**`apiCall()` ヘルパー関数**
+
+```js
+async function apiCall(method, url, body) {
+  try {
+    const res = await fetch(url, {
+      method,                                          // "POST" / "DELETE"
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body:    body ? JSON.stringify(body) : undefined, // JS オブジェクト → JSON 文字列
+    });
+    showFeedback(res.ok ? `OK ${method} ${url}` : `Error ${res.status}`, res.ok);
+  } catch (e) {
+    showFeedback(String(e), false);                    // ネットワークエラー
+  }
+}
+```
+
+- `method`: HTTP メソッド文字列 (`"POST"`, `"DELETE"`)
+- `body`: 送るデータ。`undefined` のとき `fetch()` はボディなしのリクエストを送る
+- `res.ok`: HTTP ステータスが 200–299 なら `true`
+
+```cpp
+// C++ イメージ（疑似コード）
+void apiCall(const string& method, const string& url, const json& body) {
+    auto res = http_client.request(method, url, body.dump());
+    showFeedback(res.status_code == 200 ? "OK" : "Error", res.ok());
+}
+```
+
+**`showFeedback()` — 操作結果の表示**
+
+```js
+function showFeedback(msg, ok) {
+  feedback.textContent = msg;
+  feedback.className   = ok ? 'ok' : 'err';  // CSS クラスで色を切り替え
+  clearTimeout(feedback._t);
+  feedback._t = setTimeout(() => {           // 3 秒後に消す
+    feedback.textContent = '';
+    feedback.className   = '';
+  }, 3000);
+}
+```
+
+`setTimeout(fn, ms)` は「ms ミリ秒後に fn を呼ぶ」非同期タイマーです。  
+`clearTimeout()` で前回のタイマーをキャンセルして上書きしています。
+
+**ボタンハンドラ**
+
+```js
+// setSymbol() ボタン
+document.getElementById('vab-set-btn').addEventListener('click', () => {
+  const label = document.getElementById('vab-label').value.trim();  // 前後の空白を除去
+  const lat   = parseFloat(document.getElementById('vab-lat').value);
+  const lon   = parseFloat(document.getElementById('vab-lon').value);
+  const type  = document.getElementById('vab-type').value;
+
+  if (!label) { showFeedback('label is required', false); return; }
+
+  // POST /api/symbols に JSON ボディを送る
+  apiCall('POST', '/api/symbols', { label, lat, lon, type });
+  //                               ↑ { label: label, lat: lat, ... } の省略記法
+});
+
+// removeSymbol() ボタン
+document.getElementById('vab-rm-btn').addEventListener('click', () => {
+  const label = document.getElementById('vab-rm-label').value.trim();
+  if (!label) { showFeedback('label is required', false); return; }
+
+  // DELETE /api/symbols/Alpha — URL にラベルを埋め込む
+  // encodeURIComponent() で特殊文字（スペース等）をエスケープ
+  apiCall('DELETE', `/api/symbols/${encodeURIComponent(label)}`);
+});
+
+// clearSymbols() ボタン
+document.getElementById('vab-clear-btn').addEventListener('click', () => {
+  apiCall('DELETE', '/api/symbols');  // ボディなし
+});
+```
+
+`parseFloat()` は文字列を浮動小数点数に変換します。C++ の `std::stod()` に相当します。  
+`encodeURIComponent('Hello World')` → `'Hello%20World'`（URL に安全な形式に変換）。
+
+---
+
 ## 5. データの流れ（全体まとめ）
 
 ```
@@ -466,6 +641,15 @@ C++ (MapServer)                    ブラウザ (app.js)
 SSE 接続:
                            ──── GET /events ─────────►  (接続維持)
                            ◄─── data: [] ─────────── 初回スナップショット
+
+VAB からシンボルを追加（ブラウザ → C++）:
+                           ──── POST /api/symbols ──►
+                                body: {"label":"Alpha","lat":35.69,...}
+  symbols["Alpha"] = {...}
+  sse.broadcast(json_array)
+                           ◄─── data: [{"label":"Alpha",...}]
+                                es.onmessage → updateSymbols()
+                                  → L.marker([35.69,139.69]).addTo(map)
 
 C++ プロセスが setSymbol() 呼び出し:
   symbols["Tokyo"] = {...}
