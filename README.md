@@ -270,6 +270,32 @@ void clearSymbols();
 
 すべての操作は内部 mutex で保護され、変更直後に全 SSE クライアントへブロードキャストされます。
 
+#### カスタム POST エンドポイント
+
+```cpp
+// ブラウザのボタン（または curl）から呼べる POST エンドポイントを追加する。
+// start() を呼ぶ前に登録すること。
+using PostHandler = std::function<std::string(const std::string& body_json)>;
+void addRoute(const std::string& path, PostHandler handler);
+```
+
+`handler` は **リクエストボディ (JSON 文字列)** を受け取り、**レスポンス JSON 文字列** を返します。  
+ハンドラ内から `setSymbol()` など他のメソッドを呼び出せます。
+
+```cpp
+// 例: /api/alert に POST が来たらシンボルを追加
+server.addRoute("/api/alert", [&server](const std::string& /*body*/) {
+    server.setSymbol("ALERT", 35.69, 139.69, "enemy");
+    return std::string(R"({"ok": true})");
+});
+
+// ブラウザ側から呼ぶ
+// fetch('/api/alert', { method: 'POST' });
+
+// curl から呼ぶ
+// curl -X POST http://localhost:9000/api/alert
+```
+
 ---
 
 ### `ShmPublisher` クラス

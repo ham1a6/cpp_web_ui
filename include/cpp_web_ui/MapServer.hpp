@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -69,6 +70,21 @@ public:
 
     // Thread-safe: remove all symbols.
     void clearSymbols();
+
+    // Register a custom POST endpoint callable from a browser button (or curl).
+    // Must be called before start().
+    //
+    // 'handler' receives the raw JSON request body and returns a JSON string to
+    // send back as the HTTP response.  The handler runs on a server thread, so
+    // it is safe to call setSymbol() / removeSymbol() / clearSymbols() inside it.
+    //
+    // Example:
+    //   server.addRoute("/api/alert", [&](const std::string& /*body*/) {
+    //       server.setSymbol("ALERT", 35.69, 139.69, "enemy");
+    //       return std::string(R"({"ok":true})");
+    //   });
+    using PostHandler = std::function<std::string(const std::string& body_json)>;
+    void addRoute(const std::string& path, PostHandler handler);
 
     MapServer(const MapServer&)            = delete;
     MapServer& operator=(const MapServer&) = delete;

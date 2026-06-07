@@ -142,6 +142,9 @@ struct MapServer::Impl {
     httplib::Server svr;
     fs::path        web_root;
 
+    // Custom POST routes registered via MapServer::addRoute() before start()
+    std::vector<std::pair<std::string, MapServer::PostHandler>> custom_routes;
+
     std::thread         server_thread;
     std::thread         shm_thread;
     std::atomic<bool>   running{false};
@@ -252,6 +255,14 @@ struct MapServer::Impl {
             broadcastSnapshot();
             res.set_content("{}", "application/json");
         });
+
+        // Custom POST routes registered by the user via addRoute()
+        for (const auto& [path, handler] : custom_routes) {
+            svr.Post(path, [handler](const httplib::Request& req, httplib::Response& res) {
+                std::string result = handler(req.body);
+                res.set_content(result, "application/json");
+            });
+        }
 
         // Static file serving
         svr.Get("/.*", [this](const httplib::Request& req, httplib::Response& res) {
@@ -421,6 +432,10 @@ void MapServer::clearSymbols() {
       impl_->symbols.clear();
       impl_->shm_labels.clear(); }
     impl_->broadcastSnapshot();
+}
+
+void MapServer::addRoute(const std::string& path, PostHandler handler) {
+    impl_->custom_routes.emplace_back(path, std::move(handler));
 }
 
 } // namespace cpp_web_ui
