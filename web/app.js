@@ -124,6 +124,49 @@ const DEFAULT_CONFIG = {
   connect();
 
   // ----------------------------------------------------------------
+  // リサイズハンドル — パネル幅をドラッグで変更
+  // ----------------------------------------------------------------
+  function makeResizable(handle, panel, side) {
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = panel.offsetWidth;
+      handle.classList.add('dragging');
+      document.body.style.cursor     = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      function onMove(e) {
+        const dx = e.clientX - startX;
+        const w  = Math.max(120, Math.min(480,
+                     side === 'left' ? startW + dx : startW - dx));
+        panel.style.width    = w + 'px';
+        panel.style.minWidth = w + 'px';
+        map.invalidateSize();   // Leaflet に地図サイズの変化を通知
+      }
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.style.cursor     = '';
+        document.body.style.userSelect = '';
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  }
+
+  makeResizable(
+    document.getElementById('handle-left'),
+    document.getElementById('vab'),
+    'left'
+  );
+  makeResizable(
+    document.getElementById('handle-right'),
+    document.getElementById('status-panel'),
+    'right'
+  );
+
+  // ----------------------------------------------------------------
   // VAB — C++ API 呼び出しヘルパー
   // ----------------------------------------------------------------
   const feedback = document.getElementById('vab-feedback');

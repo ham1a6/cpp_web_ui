@@ -22,8 +22,19 @@ body {
   overflow-y: auto;
 }
 
-#vab          { border-right: 1px solid #0f3460; }
-#status-panel { border-left:  1px solid #0f3460; }
+/* ================================================================
+   リサイズハンドル（パネル間のドラッグ可能な仕切り線）
+   ================================================================ */
+.resize-handle {
+  width: 5px;
+  flex-shrink: 0;
+  background: #0f3460;
+  cursor: col-resize;
+  transition: background 0.12s;
+  user-select: none;
+}
+.resize-handle:hover,
+.resize-handle.dragging { background: #00d4ff; box-shadow: 0 0 6px #00d4ff66; }
 
 h2 {
   font-size: 0.9rem;
