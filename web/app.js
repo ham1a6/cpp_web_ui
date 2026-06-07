@@ -167,6 +167,57 @@ const DEFAULT_CONFIG = {
   );
 
   // ----------------------------------------------------------------
+  // メニューバー — プルダウン開閉
+  // ----------------------------------------------------------------
+  // クリックで .open を付け外し
+  document.querySelectorAll('.menu-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const item    = btn.closest('.menu-item');
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
+
+  // メニュー外クリックで全閉じ
+  document.addEventListener('click', () => {
+    document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
+  });
+
+  // ドロップダウン項目クリック後に閉じる
+  document.querySelectorAll('.menu-dropdown button').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
+    });
+  });
+
+  // View > パネル表示切替
+  function togglePanel(panelId, handleId, btnEl, labelHide, labelShow) {
+    const panel   = document.getElementById(panelId);
+    const handle  = document.getElementById(handleId);
+    const visible = panel.style.display !== 'none';
+    panel.style.display  = visible ? 'none' : '';
+    handle.style.display = visible ? 'none' : '';
+    btnEl.textContent    = visible ? labelShow : labelHide;
+    map.invalidateSize();
+  }
+
+  document.getElementById('menu-toggle-vab').addEventListener('click', function () {
+    togglePanel('vab', 'handle-left', this, 'VAB を隠す', 'VAB を表示');
+  });
+
+  document.getElementById('menu-toggle-status').addEventListener('click', function () {
+    togglePanel('status-panel', 'handle-right', this, 'Status を隠す', 'Status を表示');
+  });
+
+  // Symbols > 全シンボル削除
+  document.getElementById('menu-clear-symbols').addEventListener('click', () => {
+    apiCall('DELETE', '/api/symbols');
+  });
+
+  // ----------------------------------------------------------------
   // VAB — C++ API 呼び出しヘルパー
   // ----------------------------------------------------------------
   const feedback = document.getElementById('vab-feedback');

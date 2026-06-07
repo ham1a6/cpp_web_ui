@@ -9,75 +9,104 @@
 </head>
 <body>
 
-  <!-- 左: VAB -->
-  <div id="vab">
-    <h2>VAB</h2>
+  <!-- 上部: メニューバー -->
+  <nav id="menubar">
+    <ul class="menu-list">
 
-    <section class="vab-section">
-      <h3>setSymbol()</h3>
-      <label class="vab-row">
-        <span>label</span>
-        <input id="vab-label" type="text" placeholder="Alpha" maxlength="31">
-      </label>
-      <label class="vab-row">
-        <span>lat</span>
-        <input id="vab-lat" type="number" step="0.001" value="35.690">
-      </label>
-      <label class="vab-row">
-        <span>lon</span>
-        <input id="vab-lon" type="number" step="0.001" value="139.692">
-      </label>
-      <label class="vab-row">
-        <span>type</span>
-        <select id="vab-type">
-          <option value="friendly">friendly</option>
-          <option value="enemy">enemy</option>
-          <option value="neutral">neutral</option>
-          <option value="unknown">unknown</option>
-        </select>
-      </label>
-      <button class="vab-btn" id="vab-set-btn">setSymbol()</button>
-    </section>
+      <li class="menu-item">
+        <button class="menu-btn">View <span class="menu-arrow">▾</span></button>
+        <ul class="menu-dropdown">
+          <li><button id="menu-toggle-vab">VAB を隠す</button></li>
+          <li><button id="menu-toggle-status">Status を隠す</button></li>
+        </ul>
+      </li>
 
-    <section class="vab-section">
-      <h3>removeSymbol()</h3>
-      <label class="vab-row">
-        <span>label</span>
-        <input id="vab-rm-label" type="text" placeholder="Alpha" maxlength="31">
-      </label>
-      <button class="vab-btn vab-btn-danger" id="vab-rm-btn">removeSymbol()</button>
-    </section>
+      <li class="menu-item">
+        <button class="menu-btn">Symbols <span class="menu-arrow">▾</span></button>
+        <ul class="menu-dropdown">
+          <li><button id="menu-clear-symbols">全シンボル削除</button></li>
+        </ul>
+      </li>
 
-    <section class="vab-section">
-      <button class="vab-btn vab-btn-danger" id="vab-clear-btn">clearSymbols()</button>
-    </section>
+    </ul>
 
-    <div id="vab-feedback"></div>
-
-    <!-- 4×4 カスタムボタングリッド -->
-    <section class="vab-section">
-      <h3>Custom Buttons</h3>
-      <div id="btn-grid"></div>
-    </section>
-  </div>
-
-  <div class="resize-handle" id="handle-left"></div>
-
-  <!-- 中央: 地図 -->
-  <div id="map"></div>
-
-  <div class="resize-handle" id="handle-right"></div>
-
-  <!-- 右: ステータス -->
-  <div id="status-panel">
-    <h2>Status</h2>
-    <div id="status-bar">
+    <!-- 右端: SSE 接続状態 -->
+    <div id="menubar-right">
       <span id="conn-indicator" class="dot disconnected"></span>
       <span id="conn-label">接続中...</span>
     </div>
-    <div id="symbol-count">シンボル数: <strong id="count">0</strong></div>
-    <ul id="symbol-list"></ul>
-  </div>
+  </nav>
+
+  <!-- パネルエリア (VAB | 地図 | Status) -->
+  <div id="main">
+
+    <!-- 左: VAB -->
+    <div id="vab">
+      <h2>VAB</h2>
+
+      <section class="vab-section">
+        <h3>setSymbol()</h3>
+        <label class="vab-row">
+          <span>label</span>
+          <input id="vab-label" type="text" placeholder="Alpha" maxlength="31">
+        </label>
+        <label class="vab-row">
+          <span>lat</span>
+          <input id="vab-lat" type="number" step="0.001" value="35.690">
+        </label>
+        <label class="vab-row">
+          <span>lon</span>
+          <input id="vab-lon" type="number" step="0.001" value="139.692">
+        </label>
+        <label class="vab-row">
+          <span>type</span>
+          <select id="vab-type">
+            <option value="friendly">friendly</option>
+            <option value="enemy">enemy</option>
+            <option value="neutral">neutral</option>
+            <option value="unknown">unknown</option>
+          </select>
+        </label>
+        <button class="vab-btn" id="vab-set-btn">setSymbol()</button>
+      </section>
+
+      <section class="vab-section">
+        <h3>removeSymbol()</h3>
+        <label class="vab-row">
+          <span>label</span>
+          <input id="vab-rm-label" type="text" placeholder="Alpha" maxlength="31">
+        </label>
+        <button class="vab-btn vab-btn-danger" id="vab-rm-btn">removeSymbol()</button>
+      </section>
+
+      <section class="vab-section">
+        <button class="vab-btn vab-btn-danger" id="vab-clear-btn">clearSymbols()</button>
+      </section>
+
+      <div id="vab-feedback"></div>
+
+      <!-- 4×4 カスタムボタングリッド -->
+      <section class="vab-section">
+        <h3>Custom Buttons</h3>
+        <div id="btn-grid"></div>
+      </section>
+    </div>
+
+    <div class="resize-handle" id="handle-left"></div>
+
+    <!-- 中央: 地図 -->
+    <div id="map"></div>
+
+    <div class="resize-handle" id="handle-right"></div>
+
+    <!-- 右: ステータス -->
+    <div id="status-panel">
+      <h2>Status</h2>
+      <div id="symbol-count">シンボル数: <strong id="count">0</strong></div>
+      <ul id="symbol-list"></ul>
+    </div>
+
+  </div><!-- #main -->
 
   <script src="lib/leaflet.js"></script>
   <script src="app.js"></script>

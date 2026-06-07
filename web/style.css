@@ -2,10 +2,103 @@
 
 body {
   display: flex;
+  flex-direction: column;
   height: 100vh;
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: #1a1a2e;
   color: #e0e0e0;
+}
+
+/* ================================================================
+   メニューバー
+   ================================================================ */
+#menubar {
+  height: 30px;
+  flex-shrink: 0;
+  background: #0d1526;
+  border-bottom: 1px solid #0f3460;
+  display: flex;
+  align-items: stretch;
+  user-select: none;
+  z-index: 500;
+}
+
+.menu-list {
+  list-style: none;
+  display: flex;
+  height: 100%;
+}
+
+.menu-item {
+  position: relative;
+  height: 100%;
+}
+
+.menu-btn {
+  height: 100%;
+  padding: 0 14px;
+  background: transparent;
+  border: none;
+  color: #c0d8f0;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.menu-btn:hover,
+.menu-item.open > .menu-btn { background: #1a3a60; }
+
+.menu-arrow { font-size: 0.55rem; opacity: 0.7; }
+
+.menu-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #16213e;
+  border: 1px solid #0f3460;
+  list-style: none;
+  min-width: 160px;
+  z-index: 1000;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+}
+.menu-item.open > .menu-dropdown { display: block; }
+
+.menu-dropdown li + li { border-top: 1px solid #0f3460; }
+
+.menu-dropdown li button {
+  width: 100%;
+  padding: 7px 16px;
+  background: transparent;
+  border: none;
+  color: #c0d8f0;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  text-align: left;
+}
+.menu-dropdown li button:hover { background: #1a3a60; color: #fff; }
+
+#menubar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  font-size: 0.78rem;
+  color: #aaa;
+}
+
+/* ================================================================
+   メインエリア (VAB | 地図 | Status)
+   ================================================================ */
+#main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
 }
 
 /* ================================================================
@@ -157,13 +250,6 @@ h2 {
 /* ================================================================
    ステータスパネル
    ================================================================ */
-#status-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-}
-
 .dot {
   width: 9px; height: 9px;
   border-radius: 50%;
