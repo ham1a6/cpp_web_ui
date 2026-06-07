@@ -572,6 +572,63 @@ document.getElementById('alert-btn').addEventListener('click', () => {
 
 これで「ボタンクリック → JS が `fetch(POST /api/alert)` → C++ のラムダが実行される」という流れが完成します。
 
+---
+
+### 4-14. 4×4 カスタムボタングリッド
+
+VAB の下部に B01〜B16 の 16 個のボタンが並んでいます。押すと `POST /api/btn/{n}` が送られます。
+
+**JS 側 — ボタンを生成する**
+
+```js
+const grid = document.getElementById('btn-grid');
+for (let n = 1; n <= 16; n++) {
+  const btn = document.createElement('button');
+  btn.className   = 'grid-btn';
+  btn.textContent = `B${String(n).padStart(2, '0')}`;  // "B01", "B02", ...
+  btn.addEventListener('click', () => apiCall('POST', `/api/btn/${n}`));
+  grid.appendChild(btn);
+}
+```
+
+`document.createElement('button')` で JS からボタン要素を動的に作り、  
+`parent.appendChild(child)` でグリッドに追加しています。
+
+`String(n).padStart(2, '0')` は C++ の `std::format("{:02d}", n)` に相当します。
+
+**CSS 側 — 正方形グリッドを作る**
+
+```css
+#btn-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 列。各列の幅を均等分割 */
+  gap: 4px;
+}
+
+.grid-btn {
+  aspect-ratio: 1;   /* 幅と高さを同じにして正方形にする */
+  font-family: monospace;
+}
+```
+
+`display: grid` は Flexbox の兄弟格のレイアウトモードです。  
+`repeat(4, 1fr)` は「4 列、それぞれ 1 等分 (fraction)」という意味です。
+
+**C++ 側 — 処理を割り当てる**
+
+```cpp
+for (int n = 1; n <= 16; ++n) {
+    server.addRoute("/api/btn/" + std::to_string(n),
+                    [n](const std::string& /*body*/) {
+        std::printf("B%02d pressed\n", n);
+        return std::string(R"({"ok": true})");
+    });
+}
+server.start();
+```
+
+登録しないボタンを押しても 404 が返るだけで、サーバーはクラッシュしません。
+
 **`apiCall()` ヘルパー関数**
 
 ```js

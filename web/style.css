@@ -105,6 +105,29 @@ h2 {
 .vab-btn-danger              { border-color: #5a1a1a; color: #f0c0c0; }
 .vab-btn-danger:hover        { background: #3a0f0f; }
 
+/* 4×4 カスタムボタングリッド */
+#btn-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.grid-btn {
+  aspect-ratio: 1;
+  background: #0f3460;
+  border: 1px solid #1a5080;
+  color: #c0d8f0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.62rem;
+  font-family: monospace;
+  font-weight: bold;
+  transition: background 0.12s;
+  padding: 0;
+}
+.grid-btn:hover  { background: #1a4a80; }
+.grid-btn:active { background: #0a2040; }
+
 #vab-feedback {
   font-size: 0.7rem;
   font-family: monospace;

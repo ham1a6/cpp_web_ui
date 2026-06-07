@@ -174,4 +174,18 @@ const DEFAULT_CONFIG = {
     apiCall('DELETE', '/api/symbols');
   });
 
+  // ----------------------------------------------------------------
+  // 4×4 カスタムボタングリッド
+  // 各ボタンは POST /api/btn/{n} を送る。
+  // C++ 側で server.addRoute("/api/btn/1", handler) を登録すれば動く。
+  // ----------------------------------------------------------------
+  const grid = document.getElementById('btn-grid');
+  for (let n = 1; n <= 16; n++) {
+    const btn = document.createElement('button');
+    btn.className   = 'grid-btn';
+    btn.textContent = `B${String(n).padStart(2, '0')}`;
+    btn.addEventListener('click', () => apiCall('POST', `/api/btn/${n}`));
+    grid.appendChild(btn);
+  }
+
 })();

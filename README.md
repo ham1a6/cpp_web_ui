@@ -584,6 +584,26 @@ index.html 読み込み
 | `setSymbol()` | `POST /api/symbols` | `MapServer::setSymbol()` |
 | `removeSymbol()` | `DELETE /api/symbols/:label` | `MapServer::removeSymbol()` |
 | `clearSymbols()` | `DELETE /api/symbols` | `MapServer::clearSymbols()` |
+| B01〜B16 グリッド | `POST /api/btn/1`〜`POST /api/btn/16` | `addRoute()` で登録したラムダ |
+
+グリッドボタンへの処理割り当て:
+
+```cpp
+// C++ 側で addRoute() を登録するだけ
+server.addRoute("/api/btn/1", [](const std::string& /*body*/) {
+    std::printf("B01 pressed!\n");
+    return std::string(R"({"ok": true})");
+});
+
+// ループでまとめて登録することもできる
+for (int n = 1; n <= 16; ++n) {
+    server.addRoute("/api/btn/" + std::to_string(n),
+                    [n](const std::string& /*body*/) {
+        std::printf("B%02d pressed\n", n);
+        return std::string(R"({"ok": true})");
+    });
+}
+```
 
 ### シンボル種別とスタイル
 

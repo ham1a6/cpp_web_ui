@@ -77,6 +77,17 @@ int main() {
         return body.empty() ? std::string(R"({"echo":""})") : body;
     });
 
+    // ---- ④ 4×4 グリッドボタン (B01〜B16) ----------------------------
+    // ブラウザの VAB に表示される 16 個のボタンに処理を割り当てる例。
+    // ボタン n を押すと POST /api/btn/{n} が送られる。
+    for (int n = 1; n <= 16; ++n) {
+        server.addRoute("/api/btn/" + std::to_string(n),
+                        [n](const std::string& /*body*/) {
+            std::printf("[B%02d] button %d pressed\n", n, n);
+            return std::string(R"({"ok": true})");
+        });
+    }
+
     server.start();
     std::printf("Open http://localhost:%d\n\n", cfg.port);
     std::printf("Built-in VAB buttons (browser):\n");
@@ -84,7 +95,8 @@ int main() {
     std::printf("Custom endpoints (curl or browser fetch):\n");
     std::printf("  POST /api/alert  → setSymbol(ALERT, enemy)\n");
     std::printf("  POST /api/reset  → clearSymbols()\n");
-    std::printf("  POST /api/echo   → body をそのまま返す\n\n");
+    std::printf("  POST /api/echo   → body をそのまま返す\n");
+    std::printf("  POST /api/btn/1〜16 → VAB グリッドボタン\n\n");
 
     // Alpha シンボルが円を描いて移動する
     double lat = 35.690, lon = 139.692;
