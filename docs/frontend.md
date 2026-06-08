@@ -42,15 +42,18 @@ C++ で言えば:
 
 ## 2. `index.html` — ページの骨格
 
-画面は 3 列構成です。
+メニューバー + 3 列構成です。
 
 ```
-┌────────────┬──────────────────────────┬────────────┐
-│  #vab      │         #map             │ #status-   │
-│  (VAB)     │       (地図エリア)         │  panel     │
-│  220px     │        flex: 1           │  220px     │
-└────────────┴──────────────────────────┴────────────┘
+┌─ #menubar ──────────────────────────── Z14  ● SSE接続中 ─┐
+├────────────┬──────────────────────────┬────────────────────┤
+│  #vab      │         #map             │   #status-panel    │
+│  (VAB)     │       (地図エリア)         │      220px         │
+│  220px     │        flex: 1           │                    │
+└────────────┴──────────────────────────┴────────────────────┘
 ```
+
+`Z14` はメニューバー右端のズームレベル表示（`#menubar-zoom`）です。地図をズームするたびに更新されます。
 
 ```html
 <!DOCTYPE html>              <!-- HTML5 文書であることを宣言 -->
@@ -197,13 +200,17 @@ body {
 `display: flex` は「子要素を柔軟に配置するモード」です。  
 `flex: 1` は「余ったスペースをすべて自分に割り当てる」という意味です。
 
-3 カラムの配置イメージ:
+レイアウトの全体像:
 
 ```
-body (display: flex)
-├── #vab         (width: 220px)    ← 固定幅
-├── #map         (flex: 1)         ← 残り全部
-└── #status-panel (width: 220px)   ← 固定幅
+body (display: flex; flex-direction: column)
+├── #menubar         (height: 30px; flex-shrink: 0)
+└── #main            (display: flex; flex: 1)
+    ├── #vab         (width: 220px)    ← 固定幅（リサイズ可）
+    ├── .resize-handle                 ← ドラッグ境界線
+    ├── #map         (flex: 1)         ← 残り全部
+    ├── .resize-handle
+    └── #status-panel (width: 220px)   ← 固定幅（リサイズ可）
 ```
 
 ### 接続状態インジケーター（丸いドット）
@@ -342,18 +349,55 @@ label->setText(cfg.title);      // Qt 風に例えると
 // 地図を <div id="map"> に作成し、中心座標とズームを設定
 const map = L.map('map', {
   preferCanvas: true,   // マーカーを Canvas で描画（大量マーカーで高速）
-}).setView([36.0, 137.5], 6);
+}).setView(cfg.center, cfg.zoom);  // cfg は /api/config から取得
 
-// タイル画像レイヤーを追加
-L.tileLayer('/tiles/{z}/{x}/{y}.png', {
-  maxZoom:       13,    // これ以上ズームできない
-  maxNativeZoom: 13,    // この解像度のタイルが存在する上限
-  keepBuffer:    2,     // 画面外 2 タイル分を事前に読み込む
+// ベースタイル（JAXA 陰影起伏）
+L.tileLayer(cfg.tile_url, {
+  maxZoom:       cfg.max_zoom,        // 18 (UI 上限)
+  maxNativeZoom: cfg.max_native_zoom, // 13 (タイルの実在上限; 超えると拡大表示)
+  keepBuffer:    2,
 }).addTo(map);
+
+// オーバーレイ（国土地理院 淡色地図）— cfg.overlay_url が設定されているとき
+if (cfg.overlay_url) {
+  const overlayLayer = L.tileLayer(cfg.overlay_url, {
+    opacity:       cfg.overlay_opacity ?? 0.75,  // 建物・道路が見えやすい不透明度
+    maxNativeZoom: 18,   // GSI タイルはズーム 18 まで存在
+    maxZoom:       cfg.max_zoom,
+  }).addTo(map);
+}
 ```
 
-`{z}/{x}/{y}` はズーム・列・行に自動置換されます。  
-例: ズーム 6 の日本中央付近 → `/tiles/6/57/25.png`
+**2 層構造のポイント:**
+
+| 層 | タイルURL | 用途 | opacity |
+|---|---|---|---|
+| ベース | `/tiles/{z}/{x}/{y}.png` | JAXA 陰影起伏（地形把握） | 1.0 |
+| オーバーレイ | `cyberjapandata.gsi.go.jp/...` | 建物・道路の輪郭 | 0.75 |
+
+`maxNativeZoom` は「実際のタイルが存在する最大ズーム」で、それを超えると Leaflet がそのタイルを拡大表示します。JAXA は zoom 13 まで、GSI は zoom 18 まで存在します。
+
+**建物・道路が見えるズームレベルの目安:**
+
+| ズーム | 見えるもの |
+|---|---|
+| 6–9 | 日本全体・都道府県・主要道路 |
+| 10–13 | 市区町村・街道 |
+| 14–15 | 街区・主要建物 |
+| **16–18** | **個別の建物形状・路地まで** |
+
+`{z}/{x}/{y}` はズーム・列・行に自動置換されます。
+
+**ズームレベル表示（メニューバー右端）**
+
+```js
+// map.on('zoomend') でズーム変更を検知して表示を更新
+map.on('zoomend', () => {
+  document.getElementById('menubar-zoom').textContent = `Z${map.getZoom()}`;
+});
+```
+
+GSI タイルロード失敗（ネットワーク断等）は `overlayLayer.on('tileerror', ...)` で検知し、`conn-label` に 5 秒間警告を表示します。
 
 **マーカーの追加**
 

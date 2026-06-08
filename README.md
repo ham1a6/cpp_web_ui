@@ -340,19 +340,22 @@ void clearSymbols();
 | `DELETE` | `/api/symbols` | `clearSymbols()` を呼び出す（全削除） |
 | `DELETE` | `/api/symbols/:label` | `removeSymbol(label)` を呼び出す |
 | `GET` | `/tiles/{z}/{x}/{y}.png` | タイル PNG。`Cache-Control: public, max-age=300` + ETag |
-| `GET` | `/<その他>` | `web/` 以下の静的ファイルを返す。`Cache-Control: no-cache` + ETag |
+| `GET` | `/<その他>` | `web/` 以下の静的ファイルを返す。`Cache-Control: no-store`（常に最新版を配信） |
 
 ### `/api/config` レスポンス例
 
 ```json
 {
-  "center": [36.0, 137.5],
-  "zoom": 6,
+  "center": [35.69, 139.7],
+  "zoom": 14,
   "tile_url": "/tiles/{z}/{x}/{y}.png",
   "attribution": "Elevation: © JAXA AW3D30",
   "min_zoom": 5,
-  "max_zoom": 11,
-  "max_native_zoom": 10,
+  "max_zoom": 18,
+  "max_native_zoom": 13,
+  "overlay_url": "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png",
+  "overlay_attribution": "国土地理院",
+  "overlay_opacity": 0.75,
   "title": "Map"
 }
 ```
@@ -533,18 +536,24 @@ python3 scripts/download_tiles.py
 
 ### 画面レイアウト
 
-3 カラム構成です。
+メニューバー + 3 カラム構成です。
 
 ```
-┌────────────┬──────────────────────────┬────────────┐
-│   VAB      │          Map             │  Status    │
-│  (220px)   │        (flex:1)          │  (220px)   │
-│            │                          │            │
-│ setSymbol  │   Leaflet.js + Tiles     │ ● SSE接続中│
-│ removeSymbol│                         │ 15 symbols │
-│ clearSymbols│                         │ [list]     │
-└────────────┴──────────────────────────┴────────────┘
+┌─ View ▾ ─ Symbols ▾ ─────────────────── Z14  ● SSE接続中 ─┐
+├────────────┬──────────────────────────┬────────────────────┤
+│   VAB      │          Map             │      Status        │
+│  (220px)   │        (flex:1)          │      (220px)       │
+│            │  JAXA 陰影起伏            │  ● SSE接続中       │
+│ setSymbol  │  + 国土地理院 淡色地図    │  15 symbols        │
+│ removeSymbol│  (オーバーレイ 75%)     │  [シンボルテーブル] │
+│ clearSymbols│                         │                    │
+│ [B01〜B16] │                          │                    │
+└────────────┴──────────────────────────┴────────────────────┘
 ```
+
+- **メニューバー右端**: 現在のズームレベル (`Z14` 等) と SSE 接続状態を常時表示
+- **View メニュー**: VAB / Status の表示切替、オーバーレイ透過度スライダー
+- **パネル境界**: ドラッグでリサイズ可能 (120px〜480px)
 
 ### 構成
 
