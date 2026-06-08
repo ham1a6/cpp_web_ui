@@ -84,28 +84,82 @@ const DEFAULT_CONFIG = {
   }
 
   // ----------------------------------------------------------------
-  // ステータスパネル (右)
+  // シンボルテーブル更新
   // ----------------------------------------------------------------
   function updateStatus(symbols) {
     document.getElementById('count').textContent = symbols.length;
 
-    const list = document.getElementById('symbol-list');
-    list.innerHTML = '';
+    const tbody = document.getElementById('symbol-tbody');
+    tbody.innerHTML = '';
 
     const sorted = [...symbols].sort((a, b) => a.label.localeCompare(b.label));
     for (const sym of sorted) {
-      const li = document.createElement('li');
-      li.className = sym.type;
-      li.innerHTML = `
-        <div class="sym-label">${sym.label}</div>
-        <div class="sym-coords">${sym.lat.toFixed(5)}, ${sym.lon.toFixed(5)}</div>`;
-      li.addEventListener('click', () => {
+      const tr = document.createElement('tr');
+      tr.className = sym.type;
+      tr.innerHTML = `
+        <td>${sym.label}</td>
+        <td class="sym-type ${sym.type}">${sym.type}</td>
+        <td class="sym-num">${sym.lat.toFixed(3)}</td>
+        <td class="sym-num">${sym.lon.toFixed(3)}</td>`;
+      tr.addEventListener('click', () => {
         const m = markers.get(sym.label);
         if (m) { map.setView(m.getLatLng(), 11); m.openPopup(); }
       });
-      list.appendChild(li);
+      tbody.appendChild(tr);
     }
   }
+
+  // ----------------------------------------------------------------
+  // ウィジェット ドラッグ移動 (VAB ⇔ Status)
+  // ----------------------------------------------------------------
+  (function () {
+    const widget      = document.getElementById('symbol-table-widget');
+    const dragHandle  = widget.querySelector('.widget-drag-handle');
+    const vab         = document.getElementById('vab');
+    const statusPanel = document.getElementById('status-panel');
+
+    dragHandle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      document.body.style.cursor = 'grabbing';
+      vab.classList.add('drop-target');
+      statusPanel.classList.add('drop-target');
+
+      function panelAt(x) {
+        const vr = vab.getBoundingClientRect();
+        const sr = statusPanel.getBoundingClientRect();
+        if (x >= vr.left && x <= vr.right)         return 'vab';
+        if (x >= sr.left && x <= sr.right)          return 'status';
+        return null;
+      }
+
+      function onMove(e) {
+        const target = panelAt(e.clientX);
+        vab.classList.toggle('drop-hover',   target === 'vab');
+        statusPanel.classList.toggle('drop-hover', target === 'status');
+      }
+
+      function onUp(e) {
+        document.body.style.cursor = '';
+        vab.classList.remove('drop-target', 'drop-hover');
+        statusPanel.classList.remove('drop-target', 'drop-hover');
+
+        const target = panelAt(e.clientX);
+        if (target === 'vab') {
+          widget.classList.replace('in-status', 'in-vab');
+          vab.appendChild(widget);
+        } else if (target === 'status') {
+          widget.classList.replace('in-vab', 'in-status');
+          statusPanel.appendChild(widget);
+        }
+
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup',   onUp);
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup',   onUp);
+    });
+  })();
 
   function setConnected(ok) {
     document.getElementById('conn-indicator').className = 'dot ' + (ok ? 'connected' : 'disconnected');

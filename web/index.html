@@ -102,8 +102,22 @@
     <!-- 右: ステータス -->
     <div id="status-panel">
       <h2>Status</h2>
-      <div id="symbol-count">シンボル数: <strong id="count">0</strong></div>
-      <ul id="symbol-list"></ul>
+
+      <!-- シンボルテーブルウィジェット (VAB / Status 間をドラッグで移動可) -->
+      <div id="symbol-table-widget" class="in-status">
+        <div class="widget-header">
+          <span class="widget-drag-handle" title="VAB / Status にドラッグして移動"></span>
+          <span class="widget-title">Symbols <strong id="count">0</strong></span>
+        </div>
+        <div class="widget-body">
+          <table id="symbol-table">
+            <thead>
+              <tr><th>label</th><th>type</th><th>lat</th><th>lon</th></tr>
+            </thead>
+            <tbody id="symbol-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
   </div><!-- #main -->
