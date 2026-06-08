@@ -32,6 +32,18 @@ struct MapConfig {
     int max_native_zoom = -1;   // detected value reported on stderr at startup
     int max_zoom        = -1;   // default: = max_native_zoom (no upscaling; sharp at all zoom levels)
 
+    // ---- Overlay tile layer -----------------------------------------------
+    // Drawn on top of the base tile layer (e.g. GSI road/building outlines).
+    // Leave empty (default) to disable.
+    //
+    // Example — GSI pale map:
+    //   cfg.overlay_url         = "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png";
+    //   cfg.overlay_attribution = "<a href='https://maps.gsi.go.jp/development/ichiran.html'>国土地理院</a>";
+    //   cfg.overlay_opacity     = 0.5;
+    std::string overlay_url;
+    std::string overlay_attribution;
+    double      overlay_opacity = 0.5;
+
     // ---- UI ---------------------------------------------------------------
     std::string title = "Map";
 };

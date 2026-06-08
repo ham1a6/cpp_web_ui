@@ -42,6 +42,41 @@ const DEFAULT_CONFIG = {
   }).addTo(map);
 
   // ----------------------------------------------------------------
+  // オーバーレイレイヤー (GSI 等) — C++ の overlay_url が設定されていれば追加
+  // ----------------------------------------------------------------
+  let overlayLayer = null;
+  if (cfg.overlay_url) {
+    overlayLayer = L.tileLayer(cfg.overlay_url, {
+      attribution:       cfg.overlay_attribution || '',
+      opacity:           cfg.overlay_opacity ?? 0.5,
+      maxNativeZoom:     18,
+      maxZoom:           cfg.max_zoom,
+      updateWhenZooming: false,
+      keepBuffer:        2,
+    }).addTo(map);
+
+    // View メニューにトグル項目を動的追加
+    const li  = document.createElement('li');
+    const btn = document.createElement('button');
+    btn.id          = 'menu-toggle-overlay';
+    btn.textContent = 'オーバーレイ を隠す';
+    li.appendChild(btn);
+    document.getElementById('view-menu-dropdown').appendChild(li);
+
+    btn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
+      if (map.hasLayer(overlayLayer)) {
+        map.removeLayer(overlayLayer);
+        this.textContent = 'オーバーレイ を表示';
+      } else {
+        map.addLayer(overlayLayer);
+        this.textContent = 'オーバーレイ を隠す';
+      }
+    });
+  }
+
+  // ----------------------------------------------------------------
   // シンボル管理
   // ----------------------------------------------------------------
   const markers = new Map();   // label → L.Marker

@@ -183,6 +183,9 @@ struct MapServer::Impl {
             cfg["min_zoom"]        = config.min_zoom;
             cfg["max_zoom"]        = config.max_zoom;
             cfg["max_native_zoom"] = config.max_native_zoom;
+            cfg["overlay_url"]         = config.overlay_url;
+            cfg["overlay_attribution"] = config.overlay_attribution;
+            cfg["overlay_opacity"]     = config.overlay_opacity;
             cfg["title"]           = config.title;
             res.set_header("Cache-Control", "no-cache");
             res.set_content(cfg.dump(), "application/json");
