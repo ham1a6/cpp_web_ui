@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Threads REQUIRED)
+find_package(OpenSSL)
 
 # ---- Library ---------------------------------------------------------------
 add_library(cpp_web_ui STATIC
@@ -21,6 +22,16 @@ target_include_directories(cpp_web_ui
 )
 target_link_libraries(cpp_web_ui PUBLIC Threads::Threads rt)
 target_compile_options(cpp_web_ui PRIVATE -O2 -Wall)
+
+# Enable HTTPS client in cpp-httplib when OpenSSL is available.
+# Used by the overlay tile proxy so browsers don't need direct internet access.
+if(OpenSSL_FOUND)
+    target_compile_definitions(cpp_web_ui PRIVATE CPPHTTPLIB_OPENSSL_SUPPORT)
+    target_link_libraries(cpp_web_ui PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    message(STATUS "cpp_web_ui: OpenSSL found — overlay tile proxy supports HTTPS")
+else()
+    message(WARNING "cpp_web_ui: OpenSSL not found — overlay tile proxy limited to HTTP")
+endif()
 # Embed install prefix so the library can auto-locate the web/ directory
 target_compile_definitions(cpp_web_ui PRIVATE
     CPP_WEB_UI_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"

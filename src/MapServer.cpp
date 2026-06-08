@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -129,6 +130,43 @@ static int detectMaxNativeZoom(const fs::path& tiles_dir) {
     return max_z;
 }
 
+// Parse "scheme://host/path" into parts.
+struct ParsedUrl {
+    std::string scheme;
+    std::string host;
+    std::string path_tpl;
+    bool valid = false;
+};
+
+static ParsedUrl parseUrl(const std::string& url) {
+    ParsedUrl r;
+    auto s = url.find("://");
+    if (s == std::string::npos) return r;
+    r.scheme = url.substr(0, s);
+    auto hs  = s + 3;
+    auto ps  = url.find('/', hs);
+    if (ps == std::string::npos) return r;
+    r.host     = url.substr(hs, ps - hs);
+    r.path_tpl = url.substr(ps);
+    r.valid    = true;
+    return r;
+}
+
+// Fill {z}/{x}/{y} placeholders in a URL path template.
+static std::string fillTileTemplate(std::string tpl,
+                                    const std::string& z,
+                                    const std::string& x,
+                                    const std::string& y) {
+    auto repl = [](std::string& s, const char* f, const std::string& t) {
+        auto p = s.find(f);
+        if (p != std::string::npos) s.replace(p, std::strlen(f), t);
+    };
+    repl(tpl, "{z}", z);
+    repl(tpl, "{x}", x);
+    repl(tpl, "{y}", y);
+    return tpl;
+}
+
 } // anonymous namespace
 
 // ---------- MapServer::Impl -------------------------------------------------
@@ -149,6 +187,14 @@ struct MapServer::Impl {
 
     // Custom POST routes registered via MapServer::addRoute() before start()
     std::vector<std::pair<std::string, MapServer::PostHandler>> custom_routes;
+
+    // Overlay tile proxy: when overlay_url is an external http/https URL,
+    // the server fetches tiles on behalf of the browser so the browser
+    // only ever talks to localhost (no external network required).
+    ParsedUrl overlay_upstream;   // parsed upstream URL
+    std::mutex overlay_cache_mtx;
+    std::unordered_map<std::string, std::string> overlay_tile_cache;
+    static constexpr size_t OVERLAY_CACHE_MAX = 2000;
 
     std::thread         server_thread;
     std::thread         shm_thread;
@@ -272,6 +318,80 @@ struct MapServer::Impl {
             });
         }
 
+        // Overlay tile proxy — fetches external tiles server-side so the browser
+        // only needs localhost access regardless of network restrictions.
+        if (overlay_upstream.valid) {
+            svr.Get(R"(/overlay-tiles/(\d+)/(\d+)/(\d+))",
+                    [this](const httplib::Request& req, httplib::Response& res) {
+                const std::string z = req.matches[1].str();
+                const std::string x = req.matches[2].str();
+                const std::string y = req.matches[3].str();
+
+                const std::string path = fillTileTemplate(
+                    overlay_upstream.path_tpl, z, x, y);
+
+                // Return cached tile if available
+                {
+                    std::lock_guard<std::mutex> lk(overlay_cache_mtx);
+                    auto it = overlay_tile_cache.find(path);
+                    if (it != overlay_tile_cache.end()) {
+                        res.set_header("Cache-Control", "public, max-age=300");
+                        std::string ct = (path.find(".jpg") != std::string::npos ||
+                                          path.find(".jpeg") != std::string::npos)
+                                         ? "image/jpeg" : "image/png";
+                        res.set_content(it->second, ct);
+                        return;
+                    }
+                }
+
+                // Fetch tile from upstream
+                std::string body;
+                std::string content_type = "image/png";
+                bool ok = false;
+
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+                if (overlay_upstream.scheme == "https") {
+                    httplib::SSLClient cli(overlay_upstream.host);
+                    cli.set_connection_timeout(8);
+                    cli.set_read_timeout(10);
+                    cli.enable_server_certificate_verification(false);
+                    if (auto r = cli.Get(path.c_str());
+                        r && r->status == 200) {
+                        body = std::move(r->body);
+                        auto ct = r->get_header_value("Content-Type");
+                        if (!ct.empty()) content_type = ct;
+                        ok = true;
+                    }
+                } else
+#endif
+                {
+                    httplib::Client cli(overlay_upstream.host);
+                    cli.set_connection_timeout(8);
+                    cli.set_read_timeout(10);
+                    if (auto r = cli.Get(path.c_str());
+                        r && r->status == 200) {
+                        body = std::move(r->body);
+                        auto ct = r->get_header_value("Content-Type");
+                        if (!ct.empty()) content_type = ct;
+                        ok = true;
+                    }
+                }
+
+                if (!ok) { res.status = 502; return; }
+
+                // Store in cache (clear all on overflow — simple eviction)
+                {
+                    std::lock_guard<std::mutex> lk(overlay_cache_mtx);
+                    if (overlay_tile_cache.size() >= OVERLAY_CACHE_MAX)
+                        overlay_tile_cache.clear();
+                    overlay_tile_cache[path] = body;
+                }
+
+                res.set_header("Cache-Control", "public, max-age=300");
+                res.set_content(body, content_type);
+            });
+        }
+
         // Static file serving
         svr.Get("/.*", [this](const httplib::Request& req, httplib::Response& res) {
             if (web_root.empty()) {
@@ -381,6 +501,20 @@ MapServer::MapServer(MapConfig config) : impl_(std::make_unique<Impl>()) {
         std::fprintf(stderr,
             "cpp_web_ui: tiles detected max_native_zoom=%d  max_zoom=%d\n",
             impl_->config.max_native_zoom, impl_->config.max_zoom);
+    }
+
+    // If overlay_url is an external URL (http/https), set up a server-side proxy
+    // so the browser only needs localhost access — GSI tiles are fetched by the
+    // C++ server and forwarded to the browser.
+    auto& ou = impl_->config.overlay_url;
+    if (!ou.empty() && ou.rfind("http", 0) == 0) {
+        impl_->overlay_upstream = parseUrl(ou);
+        if (impl_->overlay_upstream.valid) {
+            ou = "/overlay-tiles/{z}/{x}/{y}";
+            std::fprintf(stderr,
+                "cpp_web_ui: overlay proxy enabled (%s)\n",
+                impl_->overlay_upstream.host.c_str());
+        }
     }
 }
 
