@@ -82,6 +82,23 @@ body {
 }
 .menu-dropdown li button:hover { background: #1a3a60; color: #fff; }
 
+.menu-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  cursor: default;
+  white-space: nowrap;
+}
+.menu-slider-row span       { font-size: 0.78rem; color: #c0d8f0; }
+.menu-slider-row span:last-child { width: 30px; text-align: right; color: #778; }
+.menu-slider-row input[type="range"] {
+  flex: 1;
+  min-width: 80px;
+  accent-color: #00d4ff;
+  cursor: pointer;
+}
+
 #menubar-right {
   margin-left: auto;
   display: flex;

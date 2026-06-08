@@ -55,15 +55,18 @@ const DEFAULT_CONFIG = {
       keepBuffer:        2,
     }).addTo(map);
 
-    // View メニューにトグル項目を動的追加
-    const li  = document.createElement('li');
-    const btn = document.createElement('button');
-    btn.id          = 'menu-toggle-overlay';
-    btn.textContent = 'オーバーレイ を隠す';
-    li.appendChild(btn);
-    document.getElementById('view-menu-dropdown').appendChild(li);
+    // View メニューにトグル + 透過度スライダーを動的追加
+    const dropdown = document.getElementById('view-menu-dropdown');
 
-    btn.addEventListener('click', function (e) {
+    // ① 表示/非表示トグルボタン
+    const liToggle = document.createElement('li');
+    const btnToggle = document.createElement('button');
+    btnToggle.id          = 'menu-toggle-overlay';
+    btnToggle.textContent = 'オーバーレイ を隠す';
+    liToggle.appendChild(btnToggle);
+    dropdown.appendChild(liToggle);
+
+    btnToggle.addEventListener('click', function (e) {
       e.stopPropagation();
       document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
       if (map.hasLayer(overlayLayer)) {
@@ -73,6 +76,28 @@ const DEFAULT_CONFIG = {
         map.addLayer(overlayLayer);
         this.textContent = 'オーバーレイ を隠す';
       }
+    });
+
+    // ② 透過度スライダー（ドロップダウンを閉じずに操作できる）
+    const liSlider = document.createElement('li');
+    liSlider.innerHTML = `
+      <label class="menu-slider-row">
+        <span>透過度</span>
+        <input id="overlay-opacity-slider" type="range"
+               min="0" max="1" step="0.05"
+               value="${cfg.overlay_opacity ?? 0.5}">
+        <span id="overlay-opacity-val">${Math.round((cfg.overlay_opacity ?? 0.5) * 100)}%</span>
+      </label>`;
+    dropdown.appendChild(liSlider);
+
+    // スライダー操作中はドロップダウンを閉じない
+    liSlider.addEventListener('click',      e => e.stopPropagation());
+    liSlider.addEventListener('mousedown',  e => e.stopPropagation());
+
+    document.getElementById('overlay-opacity-slider').addEventListener('input', function () {
+      const v = parseFloat(this.value);
+      overlayLayer.setOpacity(v);
+      document.getElementById('overlay-opacity-val').textContent = Math.round(v * 100) + '%';
     });
   }
 
