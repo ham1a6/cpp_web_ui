@@ -7,6 +7,11 @@ int main(int argc, char* argv[]) {
     cpp_web_ui::MapConfig cfg;
     cfg.shm_name = SHM_NAME;   // poll shared memory written by shm_writer
 
+    // Default view: central Tokyo at zoom 14 — buildings and roads clearly visible.
+    cfg.center_lat   = 35.690;
+    cfg.center_lon   = 139.700;
+    cfg.initial_zoom = 14;
+
     // GSI pale map overlay for road/building outlines on top of JAXA terrain.
     // Set CFG_NO_OVERLAY=1 to disable.
     if (!std::getenv("CFG_NO_OVERLAY")) {
@@ -15,7 +20,8 @@ int main(int argc, char* argv[]) {
         cfg.overlay_attribution =
             "<a href='https://maps.gsi.go.jp/development/ichiran.html'"
             " target='_blank'>国土地理院</a>";
-        cfg.overlay_opacity = 0.5;
+        // 0.75 opacity: buildings/roads clearly visible while terrain still shows.
+        cfg.overlay_opacity = 0.75;
     }
 
     // Allow zooming past JAXA native tiles (zoom 13) up to zoom 18.

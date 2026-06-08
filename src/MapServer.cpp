@@ -67,15 +67,20 @@ static std::string makeETag(const fs::path& p) {
 
 static void serveFile(const httplib::Request& req, httplib::Response& res,
                       const fs::path& file, bool isTile) {
-    const std::string etag = makeETag(file);
-    if (req.has_header("If-None-Match") &&
-        req.get_header_value("If-None-Match") == etag) {
-        res.status = 304;
-        return;
+    if (isTile) {
+        // Tiles: cache 5 minutes; validate with ETag to avoid re-downloading unchanged tiles.
+        const std::string etag = makeETag(file);
+        if (req.has_header("If-None-Match") &&
+            req.get_header_value("If-None-Match") == etag) {
+            res.status = 304;
+            return;
+        }
+        res.set_header("Cache-Control", "public, max-age=300, must-revalidate");
+        res.set_header("ETag", etag);
+    } else {
+        // HTML/JS/CSS: never cache — always fetch fresh so users immediately see updates.
+        res.set_header("Cache-Control", "no-store");
     }
-    res.set_header("Cache-Control",
-                   isTile ? "public, max-age=300, must-revalidate" : "no-cache");
-    res.set_header("ETag", etag);
     res.set_content(readFile(file), mimeOf(file.extension().string()));
 }
 

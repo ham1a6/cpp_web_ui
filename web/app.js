@@ -48,12 +48,24 @@ const DEFAULT_CONFIG = {
   if (cfg.overlay_url) {
     overlayLayer = L.tileLayer(cfg.overlay_url, {
       attribution:       cfg.overlay_attribution || '',
-      opacity:           cfg.overlay_opacity ?? 0.5,
+      opacity:           cfg.overlay_opacity ?? 0.75,
       maxNativeZoom:     18,
       maxZoom:           cfg.max_zoom,
       updateWhenZooming: false,
       keepBuffer:        2,
     }).addTo(map);
+
+    // タイルロード失敗を検知してメニューバーに警告
+    let tileErrorShown = false;
+    overlayLayer.on('tileerror', function () {
+      if (tileErrorShown) return;
+      tileErrorShown = true;
+      const label = document.getElementById('conn-label');
+      const origText = label.textContent;
+      label.textContent = '地図タイル読込失敗';
+      label.style.color = '#ff8844';
+      setTimeout(() => { label.textContent = origText; label.style.color = ''; }, 5000);
+    });
 
     // View メニューにトグル + 透過度スライダーを動的追加
     const dropdown = document.getElementById('view-menu-dropdown');
@@ -220,6 +232,16 @@ const DEFAULT_CONFIG = {
       document.addEventListener('mouseup',   onUp);
     });
   })();
+
+  // ----------------------------------------------------------------
+  // ズームレベル表示（メニューバー右端）
+  // ----------------------------------------------------------------
+  const zoomDisplay = document.getElementById('menubar-zoom');
+  function updateZoomDisplay() {
+    zoomDisplay.textContent = `Z${map.getZoom()}`;
+  }
+  map.on('zoomend', updateZoomDisplay);
+  updateZoomDisplay();
 
   function setConnected(ok) {
     document.getElementById('conn-indicator').className = 'dot ' + (ok ? 'connected' : 'disconnected');
