@@ -65,7 +65,7 @@ C++ で言えば:
   <title>Map</title>                                   <!-- タブに出るタイトル -->
 
   <!-- CSS ファイルを読み込む（#include に相当） -->
-  <link rel="stylesheet" href="lib/leaflet.css"/>
+  <link rel="stylesheet" href="lib/maplibre-gl.css"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -119,7 +119,7 @@ C++ で言えば:
     <div id="vab-feedback"></div>   <!-- 操作結果（OK / Error）を表示 -->
   </div>
 
-  <!-- 中央: 地図エリア（Leaflet がここを使う） -->
+  <!-- 中央: 地図エリア（MapLibre GL JS がここを使う） -->
   <div id="map"></div>
 
   <!-- 右: ステータスパネル -->
@@ -134,8 +134,8 @@ C++ で言えば:
   </div>
 
   <!-- JS ファイルを読み込む（body の最後で読むのが定番） -->
-  <script src="lib/leaflet.js"></script>   <!-- Leaflet ライブラリ（先に読む） -->
-  <script src="app.js"></script>           <!-- 自作コード（後に読む） -->
+  <script src="lib/maplibre-gl.js"></script>  <!-- MapLibre GL JS ライブラリ（先に読む） -->
+  <script src="app.js"></script>              <!-- 自作コード（後に読む） -->
 </body>
 </html>
 ```
@@ -343,75 +343,64 @@ label->setText(cfg.title);      // Qt 風に例えると
 
 ---
 
-### 4-6. Leaflet — 地図の操作
+### 4-6. MapLibre GL JS — 地図の操作
+
+Leaflet と異なり、MapLibre GL JS は WebGL で描画する地図ライブラリです。  
+座標系が **[経度, 緯度]（Leaflet の逆順）** なので注意してください。
 
 ```js
-// 地図を <div id="map"> に作成し、中心座標とズームを設定
-const map = L.map('map', {
-  preferCanvas: true,   // マーカーを Canvas で描画（大量マーカーで高速）
-}).setView(cfg.center, cfg.zoom);  // cfg は /api/config から取得
-
-// ベースタイル（JAXA 陰影起伏）
-L.tileLayer(cfg.tile_url, {
-  maxZoom:       cfg.max_zoom,        // 18 (UI 上限)
-  maxNativeZoom: cfg.max_native_zoom, // 13 (タイルの実在上限; 超えると拡大表示)
-  keepBuffer:    2,
-}).addTo(map);
-
-// オーバーレイ（国土地理院 淡色地図）— cfg.overlay_url が設定されているとき
-if (cfg.overlay_url) {
-  const overlayLayer = L.tileLayer(cfg.overlay_url, {
-    opacity:       cfg.overlay_opacity ?? 0.75,  // 建物・道路が見えやすい不透明度
-    maxNativeZoom: 18,   // GSI タイルはズーム 18 まで存在
-    maxZoom:       cfg.max_zoom,
-    errorTileUrl:  'data:image/gif;base64,...',  // タイル取得失敗時の透明フォールバック
-  }).addTo(map);
-}
-```
-
-**2 層構造のポイント:**
-
-| 層 | タイルURL | 用途 | opacity |
-|---|---|---|---|
-| ベース | `/tiles/{z}/{x}/{y}.png` | JAXA カラーレリーフ（地形把握） | 1.0 |
-| オーバーレイ | `cyberjapandata.gsi.go.jp/...` | 建物・道路の輪郭 | 0.75 |
-
-`maxNativeZoom` は「実際のタイルが存在する最大ズーム」で、それを超えると Leaflet がそのタイルを拡大表示します。JAXA は zoom 13 まで、GSI は zoom 18 まで存在します。
-
-**建物・道路が見えるズームレベルの目安:**
-
-| ズーム | 見えるもの |
-|---|---|
-| 6–9 | 日本全体・都道府県・主要道路 |
-| 10–13 | 市区町村・街道 |
-| 14–15 | 街区・主要建物 |
-| **16–18** | **個別の建物形状・路地まで** |
-
-`{z}/{x}/{y}` はズーム・列・行に自動置換されます。
-
-**ズームレベル表示（メニューバー右端）**
-
-```js
-// map.on('zoomend') でズーム変更を検知して表示を更新
-map.on('zoomend', () => {
-  document.getElementById('menubar-zoom').textContent = `Z${map.getZoom()}`;
+// MapLibre のスタイルオブジェクトで sources と layers を定義する
+const map = new maplibregl.Map({
+  container: 'map',          // <div id="map">
+  style: { version: 8, sources, layers },
+  center: [139.69, 35.69],   // [lon, lat] ← Leaflet と逆順!
+  zoom:   cfg.zoom || 6,
+  pitch:  45,                // 初期傾き（度）— 3D 地形が見やすい
+  bearing: 0,                // 方位（北向き）
 });
+
+// ロード後に 3D 地形を有効化
+let terrainEnabled = true;
+function applyTerrain() {
+  if (terrainEnabled && map.getPitch() >= 5) {
+    map.setTerrain({ source: 'terrain-dem', exaggeration: 2.0 });
+  } else {
+    map.setTerrain(null);  // pitch < 5°では 2D 平面表示
+  }
+}
+map.on('load', applyTerrain);
+map.on('pitchend', applyTerrain);  // ドラッグで傾けるたびに自動切替
 ```
 
-**オフライン時のタイル表示**
+**2 層 + 地形の構成:**
 
-オーバーレイの `errorTileUrl` に 1×1 ピクセルの透明 GIF を設定しているため、タイルが存在しない（404）場合でもブラウザは「×」アイコンではなく空白タイルを表示します。C++ サーバーが `web/overlay-tiles/` にキャッシュ済みのタイルを自動的に配信するため、一度閲覧したエリアはインターネット不要になります。`scripts/download_overlay_tiles.py` で事前にまとめてダウンロードすると完全オフラインで運用できます。
+| 層 / ソース | タイルURL | 用途 |
+|---|---|---|
+| ベース | `/tiles/{z}/{x}/{y}.png` | JAXA カラーレリーフ（地形把握） |
+| オーバーレイ | `/overlay-tiles/{z}/{x}/{y}.png` | 建物・道路の輪郭 |
+| terrain-dem | `/terrain-rgb/{z}/{x}/{y}.png` | 3D 地形メッシュ（Terrarium エンコード） |
 
-GSI タイルロード失敗（ネットワーク断等）は `overlayLayer.on('tileerror', ...)` で検知し、`conn-label` に 5 秒間警告を表示します。
+**pitch とは何か:**
+
+```
+pitch = 0°  → 真上から見る（2D 地図と同じ見え方）
+pitch = 45° → 斜め上から見る（3D 地形が立体的に見える）
+pitch = 85° → 水平近く（建物の側面が見える）
+```
+
+pitch が 5° 未満のとき `setTerrain(null)` を呼んで地形を無効化します。  
+これにより「真上から見たとき画像がゆがまない」を実現しています。
 
 **マーカーの追加**
 
 ```js
-const marker = L.marker([35.69, 139.69], { icon: myIcon })
-  .bindPopup('<b>東京</b>')   // クリック時のポップアップ
-  .addTo(map);               // 地図に追加
+// MapLibre のマーカー
+const marker = new maplibregl.Marker({ element: iconElement })
+  .setLngLat([139.69, 35.69])  // [lon, lat]
+  .setPopup(new maplibregl.Popup().setHTML('<b>東京</b>'))
+  .addTo(map);
 
-marker.setLatLng([35.70, 139.70]);  // 座標を動かす
+marker.setLngLat([139.70, 35.70]);  // 座標を動かす
 marker.remove();                    // 削除
 ```
 
@@ -769,11 +758,11 @@ C++ (MapServer)                    ブラウザ (app.js)
 ─────────────────────────────────────────────────────
 起動時:
   detectMaxNativeZoom()
-  → cfg.max_native_zoom = 13
+  → cfg.max_native_zoom = 12
                            ──── GET /api/config ────►
-                           ◄─── {"max_zoom":13,...} ─
-                                L.tileLayer({maxZoom:13})
-                                L.map().setView(...)
+                           ◄─── {"max_zoom":12,...} ─
+                                new maplibregl.Map({...})
+                                map.on('load', applyTerrain)
 
 SSE 接続:
                            ──── GET /events ─────────►  (接続維持)
@@ -786,14 +775,14 @@ VAB からシンボルを追加（ブラウザ → C++）:
   sse.broadcast(json_array)
                            ◄─── data: [{"label":"Alpha",...}]
                                 es.onmessage → updateSymbols()
-                                  → L.marker([35.69,139.69]).addTo(map)
+                                  → new maplibregl.Marker(...).setLngLat([139.69, 35.69])
 
 C++ プロセスが setSymbol() 呼び出し:
   symbols["Tokyo"] = {...}
   sse.broadcast(json_array)
                            ◄─── data: [{"label":"Tokyo",...}]
                                 es.onmessage → updateSymbols()
-                                  → L.marker([35.69,139.69]).addTo(map)
+                                  → marker.setLngLat([139.69, 35.69])
 
 SHM 経由（shm_writer プロセス）:
   shm_ptr->symbols[0] = {...}

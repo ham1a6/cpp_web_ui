@@ -84,12 +84,23 @@ const DEFAULT_CONFIG = {
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 
   // ----------------------------------------------------------------
-  // ロード後: 3D地形 & スカイ有効化
+  // 3D地形 & スカイ
+  // pitch < TERRAIN_PITCH_THRESHOLD のときは terrain を無効化して
+  // 真上から見たときのパース歪みを防ぐ。
   // ----------------------------------------------------------------
   let terrainEnabled = true;
+  const TERRAIN_PITCH_THRESHOLD = 5;
+
+  function applyTerrain() {
+    if (terrainEnabled && map.getPitch() >= TERRAIN_PITCH_THRESHOLD) {
+      map.setTerrain({ source: 'terrain-dem', exaggeration: 2.0 });
+    } else {
+      map.setTerrain(null);
+    }
+  }
 
   map.on('load', () => {
-    map.setTerrain({ source: 'terrain-dem', exaggeration: 2.0 });
+    applyTerrain();
     map.setSky({
       'sky-color':         '#1a1a2e',
       'sky-horizon-blend':  0.5,
@@ -99,6 +110,8 @@ const DEFAULT_CONFIG = {
       'fog-ground-blend':   0.5,
     });
   });
+
+  map.on('pitchend', applyTerrain);
 
   // ----------------------------------------------------------------
   // オーバーレイ: View メニューにトグル & 透過度スライダーを動的追加
@@ -149,8 +162,7 @@ const DEFAULT_CONFIG = {
   document.getElementById('menu-toggle-terrain').addEventListener('click', function () {
     terrainEnabled = !terrainEnabled;
     if (terrainEnabled) {
-      map.setTerrain({ source: 'terrain-dem', exaggeration: 2.0 });
-      map.easeTo({ pitch: 45, duration: 500 });
+      map.easeTo({ pitch: 45, duration: 500 });  // pitchend fires applyTerrain
       this.textContent = '3D地形 を無効化';
     } else {
       map.setTerrain(null);

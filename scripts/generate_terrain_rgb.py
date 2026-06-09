@@ -139,7 +139,7 @@ def main():
         # ------------------------------------------------------------ #
         # 1. Merge DSM/MSK files                                        #
         # ------------------------------------------------------------ #
-        print(f'[1/5] Building VRTs from {len(dsm_files)} DSM files...  {elapsed_str(t0)}')
+        print(f'[1/4] Building VRTs from {len(dsm_files)} DSM files...  {elapsed_str(t0)}')
         run(['gdalbuildvrt', '-resolution', 'highest', '-q',
              '-srcnodata', '-9999', '-vrtnodata', '-9999',
              '-input_file_list', tmp / 'dsm_list.txt', merged_dsm])
@@ -150,7 +150,7 @@ def main():
         # ------------------------------------------------------------ #
         # 2. Ocean masking                                               #
         # ------------------------------------------------------------ #
-        print(f'\n[2/5] Ocean masking...  {elapsed_str(t0)}')
+        print(f'\n[2/4] Ocean masking...  {elapsed_str(t0)}')
         if msk_files:
             run(['gdal_calc.py',
                  '-D', merged_dsm, '-M', merged_msk,
@@ -169,7 +169,7 @@ def main():
         # 3. Compute Terrarium value (UInt16)                           #
         #    nodata (-9999) → 32768 (sea level = 0 m)                   #
         # ------------------------------------------------------------ #
-        print(f'\n[3/5] Terrarium encoding...  {elapsed_str(t0)}')
+        print(f'\n[3/4] Terrarium encoding...  {elapsed_str(t0)}')
         run(['gdal_calc.py', '-A', masked_dsm,
              '--outfile', value_tif,
              '--type=UInt16', '--NoDataValue=0',
@@ -206,22 +206,13 @@ ds.FlushCache()
 '''], check=True)
 
         # ------------------------------------------------------------ #
-        # 4. Reproject to Web Mercator (EPSG:3857)                      #
-        # EPSG:4326 → 3857 is needed for gdal2tiles --xyz               #
-        # ------------------------------------------------------------ #
-        print(f'\n[4/5] Reprojecting to Web Mercator...  {elapsed_str(t0)}')
-        rgb_merc = tmp / 'terrain_rgb_merc.vrt'
-        run(['gdalwarp', '-q',
-             '-t_srs', 'EPSG:3857',
-             '-r', 'near',
-             '-of', 'VRT',
-             rgb_vrt, rgb_merc])
-
-        # ------------------------------------------------------------ #
-        # 5. Generate XYZ tiles                                         #
+        # 4. Generate XYZ tiles                                         #
+        # Pass EPSG:4326 VRT directly — gdal2tiles reprojects           #
+        # internally.  Avoids gdalwarp fill-value=0 corrupting ocean    #
+        # pixels (0,0,0 → elevation -32768 m in Terrarium encoding).    #
         # Use nearest-neighbor to preserve Terrarium byte encoding.     #
         # ------------------------------------------------------------ #
-        print(f'\n[5/5] Generating terrain-RGB tiles '
+        print(f'\n[4/4] Generating terrain-RGB tiles '
               f'(zoom {args.zoom_min}-{args.zoom_max})...  {elapsed_str(t0)}')
         TERRAIN_DIR.mkdir(parents=True, exist_ok=True)
         run(['gdal2tiles.py',
@@ -231,7 +222,7 @@ ds.FlushCache()
              '--resampling=near',
              '--webviewer=none',
              '--resume',
-             rgb_merc,
+             rgb_vrt,
              TERRAIN_DIR])
 
     total = time.time() - t0
