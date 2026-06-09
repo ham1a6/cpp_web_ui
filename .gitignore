@@ -2,10 +2,16 @@
 build/
 
 # 生成データ（ローカルで再生成）
-# web/tiles/  ← generate_tiles.py または download_tiles.py で生成 (~7 GB)
+# web/tiles/         ← generate_tiles.py または download_tiles.py で生成 (~7 GB)
 web/tiles/
-# map/        ← JAXA AW3D30 生データ（手動でダウンロード）
+# web/overlay-tiles/ ← download_overlay_tiles.py またはサーバー自動キャッシュで生成
+web/overlay-tiles/
+# map/               ← JAXA AW3D30 生データ（手動でダウンロード）
 map/
+
+# Python キャッシュ
+__pycache__/
+*.py[cod]
 
 # ランタイムファイル
 *.log
