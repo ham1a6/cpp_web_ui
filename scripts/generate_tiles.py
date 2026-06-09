@@ -172,7 +172,7 @@ def main():
         # ---------------------------------------------------------------- #
         # 1. Merge all DSM/MSK files into virtual mosaics (no data copy).  #
         # ---------------------------------------------------------------- #
-        print(f'[1/5] Building VRTs from {len(dsm_files)} DSM / '
+        print(f'[1/4] Building VRTs from {len(dsm_files)} DSM / '
               f'{len(msk_files)} MSK files...  {elapsed_str(t0)}')
         run(['gdalbuildvrt', '-resolution', 'highest', '-q',
              '-srcnodata', '-9999', '-vrtnodata', '-9999',
@@ -187,7 +187,7 @@ def main():
         # 2. Ocean mask: pixels where MSK bit 0-1 == 0x03 → nodata -9999.  #
         #    Processed in 256×256 tiles → no OOM even for full-Japan data.  #
         # ---------------------------------------------------------------- #
-        print(f'\n[2/5] Ocean masking (MSK bit 0x03 → nodata)...  '
+        print(f'\n[2/4] Ocean masking (MSK bit 0x03 → nodata)...  '
               f'{elapsed_str(t0)}')
         if msk_files:
             run(['gdal_calc.py',
