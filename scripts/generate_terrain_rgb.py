@@ -170,9 +170,15 @@ def main():
         #    nodata (-9999) → 32768 (sea level = 0 m)                   #
         # ------------------------------------------------------------ #
         print(f'\n[3/4] Terrarium encoding...  {elapsed_str(t0)}')
+        # --hideNoData: GDAL 3.3+ uses masked arrays by default, which would
+        # silently skip nodata pixels and write output-nodata instead of the
+        # computed value. --hideNoData forces all pixels (including -9999
+        # ocean/nodata) to be included in the numpy calc so they correctly
+        # map to sea level (32768 → R=128, G=0).
         run(['gdal_calc.py', '-A', masked_dsm,
              '--outfile', value_tif,
              '--type=UInt16', '--NoDataValue=0',
+             '--hideNoData',
              '--co', 'COMPRESS=DEFLATE', '--co', 'TILED=YES',
              '--co', 'BLOCKXSIZE=256', '--co', 'BLOCKYSIZE=256',
              '--overwrite', '--quiet',
@@ -188,7 +194,7 @@ def main():
         ]:
             run(['gdal_calc.py', '-V', value_tif,
                  '--outfile', out,
-                 '--type=Byte', '--overwrite', '--quiet',
+                 '--type=Byte', '--hideNoData', '--overwrite', '--quiet',
                  '--co', 'COMPRESS=DEFLATE', '--co', 'TILED=YES',
                  '--calc', calc])
             print(f'  {label} band done  {elapsed_str(t0)}')
