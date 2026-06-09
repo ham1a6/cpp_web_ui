@@ -274,6 +274,39 @@ h2 {
    ================================================================ */
 #map { flex: 1; background: #28597a; }
 
+/* MapLibre ポップアップ — ダークテーマ上書き */
+.maplibregl-popup-content {
+  background: #16213e;
+  color: #e0e0e0;
+  border: 1px solid #0f3460;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.8rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+}
+.maplibregl-popup-tip { border-top-color: #16213e; }
+.maplibregl-popup-close-button { color: #778; font-size: 1rem; }
+.maplibregl-popup-close-button:hover { color: #e0e0e0; background: none; }
+
+/* MapLibre コントロール — ダークテーマ */
+.maplibregl-ctrl-group {
+  background: #16213e !important;
+  border: 1px solid #0f3460 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.5) !important;
+}
+.maplibregl-ctrl-group button {
+  background: transparent !important;
+  color: #c0d8f0 !important;
+}
+.maplibregl-ctrl-group button:hover { background: #1a3a60 !important; }
+.maplibregl-ctrl-attrib {
+  background: rgba(13,21,38,0.8) !important;
+  color: #556 !important;
+  font-size: 0.62rem !important;
+}
+.maplibregl-ctrl-attrib a { color: #448 !important; }
+
 /* ================================================================
    接続インジケーター（メニューバー右端）
    ================================================================ */
@@ -383,7 +416,7 @@ h2 {
 .drop-hover  { box-shadow: inset 0 0 0 2px #00d4ff; }
 
 /* ================================================================
-   Leaflet カスタムマーカー
+   シンボルマーカー (MapLibre カスタム HTML element)
    ================================================================ */
 .sym-icon {
   display: flex; align-items: center; justify-content: center;

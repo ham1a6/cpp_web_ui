@@ -6,6 +6,8 @@ build/
 web/tiles/
 # web/overlay-tiles/ ← download_overlay_tiles.py またはサーバー自動キャッシュで生成
 web/overlay-tiles/
+# web/terrain-rgb/   ← generate_terrain_rgb.py で生成 (MapLibre 3D地形用)
+web/terrain-rgb/
 # map/               ← JAXA AW3D30 生データ（手動でダウンロード）
 map/
 

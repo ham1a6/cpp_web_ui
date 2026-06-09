@@ -60,6 +60,18 @@ if(PYTHON3)
         COMMENT "Downloading GSI pale-map overlay tiles for offline use (zoom 5-10, all Japan)"
         USES_TERMINAL
     )
+    add_custom_target(generate_terrain_rgb
+        COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/generate_terrain_rgb.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Generating Terrain-RGB tiles for MapLibre 3D terrain (zoom 5-12)"
+        USES_TERMINAL
+    )
+    add_custom_target(generate_terrain_rgb_dryrun
+        COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/generate_terrain_rgb.py --dry-run
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Terrain-RGB generation plan (no files written)"
+        USES_TERMINAL
+    )
     add_custom_target(download_overlay_tiles_dryrun
         COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/download_overlay_tiles.py --dry-run
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}

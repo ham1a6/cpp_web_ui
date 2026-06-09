@@ -4,10 +4,10 @@ const DEFAULT_CONFIG = {
   center:          [36.0, 137.5],
   zoom:            6,
   tile_url:        '/tiles/{z}/{x}/{y}.png',
-  attribution:     'Elevation: © JAXA AW3D30',
+  attribution:     'Elevation: &copy; JAXA AW3D30',
   min_zoom:        5,
-  max_zoom:        13,
-  max_native_zoom: 13,
+  max_zoom:        18,
+  max_native_zoom: 12,
   title:           'Map',
 };
 
@@ -23,111 +23,163 @@ const DEFAULT_CONFIG = {
   document.title = cfg.title;
 
   // ----------------------------------------------------------------
+  // MapLibre スタイル構築
+  // MapLibre の座標系は [lon, lat]  (Leaflet は [lat, lon])
+  // ----------------------------------------------------------------
+  const sources = {
+    'base-tiles': {
+      type:        'raster',
+      tiles:       [cfg.tile_url],
+      tileSize:    256,
+      maxzoom:     cfg.max_native_zoom || 12,
+      attribution: cfg.attribution || '',
+    },
+    'terrain-dem': {
+      type:     'raster-dem',
+      tiles:    ['/terrain-rgb/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      encoding: 'terrarium',
+      maxzoom:  12,
+    },
+  };
+
+  const layers = [
+    { id: 'base', type: 'raster', source: 'base-tiles' },
+  ];
+
+  if (cfg.overlay_url) {
+    sources['overlay'] = {
+      type:        'raster',
+      tiles:       [cfg.overlay_url],
+      tileSize:    256,
+      maxzoom:     18,
+      attribution: cfg.overlay_attribution || '',
+    };
+    layers.push({
+      id:    'overlay',
+      type:  'raster',
+      source: 'overlay',
+      paint: { 'raster-opacity': cfg.overlay_opacity ?? 0.75 },
+    });
+  }
+
+  // ----------------------------------------------------------------
   // 地図初期化
   // ----------------------------------------------------------------
-  const map = L.map('map', {
-    zoomControl:  true,
-    preferCanvas: true,
-  }).setView(cfg.center, cfg.zoom);
+  const [initLat, initLon] = cfg.center;
 
-  L.tileLayer(cfg.tile_url, {
-    attribution:       cfg.attribution,
-    minZoom:           cfg.min_zoom,
-    maxZoom:           cfg.max_zoom,
-    maxNativeZoom:     cfg.max_native_zoom,
-    minNativeZoom:     cfg.min_zoom,
-    updateWhenZooming: false,
-    keepBuffer:        2,
-    errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-  }).addTo(map);
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: { version: 8, sources, layers },
+    center:    [initLon, initLat],
+    zoom:      cfg.zoom || 6,
+    pitch:     45,
+    bearing:   0,
+    maxZoom:   cfg.max_zoom || 18,
+    minZoom:   cfg.min_zoom || 5,
+    attributionControl: false,
+  });
+
+  map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 
   // ----------------------------------------------------------------
-  // オーバーレイレイヤー (GSI 等) — C++ の overlay_url が設定されていれば追加
+  // ロード後: 3D地形 & スカイ有効化
   // ----------------------------------------------------------------
-  let overlayLayer = null;
-  if (cfg.overlay_url) {
-    overlayLayer = L.tileLayer(cfg.overlay_url, {
-      attribution:       cfg.overlay_attribution || '',
-      opacity:           cfg.overlay_opacity ?? 0.75,
-      maxNativeZoom:     18,
-      maxZoom:           cfg.max_zoom,
-      updateWhenZooming: false,
-      keepBuffer:        2,
-      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-    }).addTo(map);
+  let terrainEnabled = true;
 
-    // タイルロード失敗を検知してメニューバーに警告
-    let tileErrorShown = false;
-    overlayLayer.on('tileerror', function () {
-      if (tileErrorShown) return;
-      tileErrorShown = true;
-      const label = document.getElementById('conn-label');
-      const origText = label.textContent;
-      label.textContent = '地図タイル読込失敗';
-      label.style.color = '#ff8844';
-      setTimeout(() => { label.textContent = origText; label.style.color = ''; }, 5000);
+  map.on('load', () => {
+    map.setTerrain({ source: 'terrain-dem', exaggeration: 2.0 });
+    map.setSky({
+      'sky-color':         '#1a1a2e',
+      'sky-horizon-blend':  0.5,
+      'horizon-color':     '#1a3a60',
+      'horizon-fog-blend':  0.5,
+      'fog-color':         '#0d1526',
+      'fog-ground-blend':   0.5,
     });
+  });
 
-    // View メニューにトグル + 透過度スライダーを動的追加
+  // ----------------------------------------------------------------
+  // オーバーレイ: View メニューにトグル & 透過度スライダーを動的追加
+  // ----------------------------------------------------------------
+  if (cfg.overlay_url) {
     const dropdown = document.getElementById('view-menu-dropdown');
 
-    // ① 表示/非表示トグルボタン
     const liToggle = document.createElement('li');
     const btnToggle = document.createElement('button');
     btnToggle.id          = 'menu-toggle-overlay';
     btnToggle.textContent = 'オーバーレイ を隠す';
     liToggle.appendChild(btnToggle);
-    dropdown.appendChild(liToggle);
+    dropdown.insertBefore(liToggle, dropdown.firstChild);
 
+    let overlayVisible = true;
     btnToggle.addEventListener('click', function (e) {
       e.stopPropagation();
       document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
-      if (map.hasLayer(overlayLayer)) {
-        map.removeLayer(overlayLayer);
-        this.textContent = 'オーバーレイ を表示';
-      } else {
-        map.addLayer(overlayLayer);
-        this.textContent = 'オーバーレイ を隠す';
-      }
+      overlayVisible = !overlayVisible;
+      map.setLayoutProperty('overlay', 'visibility', overlayVisible ? 'visible' : 'none');
+      this.textContent = overlayVisible ? 'オーバーレイ を隠す' : 'オーバーレイ を表示';
     });
 
-    // ② 透過度スライダー（ドロップダウンを閉じずに操作できる）
     const liSlider = document.createElement('li');
     liSlider.innerHTML = `
       <label class="menu-slider-row">
         <span>透過度</span>
         <input id="overlay-opacity-slider" type="range"
                min="0" max="1" step="0.05"
-               value="${cfg.overlay_opacity ?? 0.5}">
-        <span id="overlay-opacity-val">${Math.round((cfg.overlay_opacity ?? 0.5) * 100)}%</span>
+               value="${cfg.overlay_opacity ?? 0.75}">
+        <span id="overlay-opacity-val">${Math.round((cfg.overlay_opacity ?? 0.75) * 100)}%</span>
       </label>`;
-    dropdown.appendChild(liSlider);
+    dropdown.insertBefore(liSlider, liToggle.nextSibling);
 
-    // スライダー操作中はドロップダウンを閉じない
-    liSlider.addEventListener('click',      e => e.stopPropagation());
-    liSlider.addEventListener('mousedown',  e => e.stopPropagation());
+    liSlider.addEventListener('click',     e => e.stopPropagation());
+    liSlider.addEventListener('mousedown', e => e.stopPropagation());
 
     document.getElementById('overlay-opacity-slider').addEventListener('input', function () {
       const v = parseFloat(this.value);
-      overlayLayer.setOpacity(v);
+      map.setPaintProperty('overlay', 'raster-opacity', v);
       document.getElementById('overlay-opacity-val').textContent = Math.round(v * 100) + '%';
     });
   }
 
   // ----------------------------------------------------------------
+  // 3D地形トグル / 北向きリセット
+  // ----------------------------------------------------------------
+  document.getElementById('menu-toggle-terrain').addEventListener('click', function () {
+    terrainEnabled = !terrainEnabled;
+    if (terrainEnabled) {
+      map.setTerrain({ source: 'terrain-dem', exaggeration: 2.0 });
+      map.easeTo({ pitch: 45, duration: 500 });
+      this.textContent = '3D地形 を無効化';
+    } else {
+      map.setTerrain(null);
+      map.easeTo({ pitch: 0, duration: 500 });
+      this.textContent = '3D地形 を有効化';
+    }
+    document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
+  });
+
+  document.getElementById('menu-reset-north').addEventListener('click', () => {
+    map.easeTo({ bearing: 0, pitch: 0, duration: 500 });
+    document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
+  });
+
+  // ----------------------------------------------------------------
   // シンボル管理
   // ----------------------------------------------------------------
-  const markers = new Map();   // label → L.Marker
+  // markers: label → { marker: maplibregl.Marker, el: HTMLElement }
+  const markers = new Map();
 
-  function makeIcon(sym) {
-    const initials = sym.label.slice(0, 2).toUpperCase();
-    return L.divIcon({
-      className:   '',
-      html:        `<div class="sym-icon ${sym.type}">${initials}</div>`,
-      iconSize:    [32, 32],
-      iconAnchor:  [16, 16],
-      popupAnchor: [0, -18],
-    });
+  function makeEl(sym) {
+    const el = document.createElement('div');
+    el.className   = `sym-icon ${sym.type}`;
+    el.textContent = sym.label.slice(0, 2).toUpperCase();
+    return el;
+  }
+
+  function popupHtml(sym) {
+    return `<b>${sym.label}</b><br>種別: ${sym.type}<br>${sym.lat.toFixed(5)}, ${sym.lon.toFixed(5)}`;
   }
 
   function updateSymbols(symbols) {
@@ -135,22 +187,26 @@ const DEFAULT_CONFIG = {
 
     for (const sym of symbols) {
       seen.add(sym.label);
-      const latlng = [sym.lat, sym.lon];
-
       if (markers.has(sym.label)) {
-        const m = markers.get(sym.label);
-        m.setLatLng(latlng);
-        m.setIcon(makeIcon(sym));
+        const { marker, el } = markers.get(sym.label);
+        marker.setLngLat([sym.lon, sym.lat]);
+        el.className   = `sym-icon ${sym.type}`;
+        el.textContent = sym.label.slice(0, 2).toUpperCase();
+        marker.getPopup().setHTML(popupHtml(sym));
       } else {
-        const m = L.marker(latlng, { icon: makeIcon(sym) })
-          .bindPopup(`<b>${sym.label}</b><br>種別: ${sym.type}<br>${sym.lat.toFixed(5)}, ${sym.lon.toFixed(5)}`)
-          .addTo(map);
-        markers.set(sym.label, m);
+        const el     = makeEl(sym);
+        const popup  = new maplibregl.Popup({ offset: 18, closeButton: true })
+                         .setHTML(popupHtml(sym));
+        const marker = new maplibregl.Marker({ element: el })
+                         .setLngLat([sym.lon, sym.lat])
+                         .setPopup(popup)
+                         .addTo(map);
+        markers.set(sym.label, { marker, el });
       }
     }
 
-    for (const [label, m] of markers) {
-      if (!seen.has(label)) { m.remove(); markers.delete(label); }
+    for (const [label, { marker }] of markers) {
+      if (!seen.has(label)) { marker.remove(); markers.delete(label); }
     }
 
     updateStatus(symbols);
@@ -175,8 +231,11 @@ const DEFAULT_CONFIG = {
         <td class="sym-num">${sym.lat.toFixed(3)}</td>
         <td class="sym-num">${sym.lon.toFixed(3)}</td>`;
       tr.addEventListener('click', () => {
-        const m = markers.get(sym.label);
-        if (m) { map.setView(m.getLatLng(), 11); m.openPopup(); }
+        const entry = markers.get(sym.label);
+        if (entry) {
+          map.flyTo({ center: [sym.lon, sym.lat], zoom: 12, duration: 800 });
+          entry.marker.togglePopup();
+        }
       });
       tbody.appendChild(tr);
     }
@@ -200,14 +259,14 @@ const DEFAULT_CONFIG = {
       function panelAt(x) {
         const vr = vab.getBoundingClientRect();
         const sr = statusPanel.getBoundingClientRect();
-        if (x >= vr.left && x <= vr.right)         return 'vab';
-        if (x >= sr.left && x <= sr.right)          return 'status';
+        if (x >= vr.left && x <= vr.right) return 'vab';
+        if (x >= sr.left && x <= sr.right) return 'status';
         return null;
       }
 
       function onMove(e) {
         const target = panelAt(e.clientX);
-        vab.classList.toggle('drop-hover',   target === 'vab');
+        vab.classList.toggle('drop-hover',         target === 'vab');
         statusPanel.classList.toggle('drop-hover', target === 'status');
       }
 
@@ -215,7 +274,6 @@ const DEFAULT_CONFIG = {
         document.body.style.cursor = '';
         vab.classList.remove('drop-target', 'drop-hover');
         statusPanel.classList.remove('drop-target', 'drop-hover');
-
         const target = panelAt(e.clientX);
         if (target === 'vab') {
           widget.classList.replace('in-status', 'in-vab');
@@ -224,7 +282,6 @@ const DEFAULT_CONFIG = {
           widget.classList.replace('in-vab', 'in-status');
           statusPanel.appendChild(widget);
         }
-
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup',   onUp);
       }
@@ -235,13 +292,13 @@ const DEFAULT_CONFIG = {
   })();
 
   // ----------------------------------------------------------------
-  // ズームレベル表示（メニューバー右端）
+  // ズームレベル表示
   // ----------------------------------------------------------------
   const zoomDisplay = document.getElementById('menubar-zoom');
   function updateZoomDisplay() {
-    zoomDisplay.textContent = `Z${map.getZoom()}`;
+    zoomDisplay.textContent = `Z${Math.round(map.getZoom())}`;
   }
-  map.on('zoomend', updateZoomDisplay);
+  map.on('zoom', updateZoomDisplay);
   updateZoomDisplay();
 
   function setConnected(ok) {
@@ -278,7 +335,7 @@ const DEFAULT_CONFIG = {
                      side === 'left' ? startW + dx : startW - dx));
         panel.style.width    = w + 'px';
         panel.style.minWidth = w + 'px';
-        map.invalidateSize();   // Leaflet に地図サイズの変化を通知
+        map.resize();
       }
       function onUp() {
         handle.classList.remove('dragging');
@@ -292,21 +349,12 @@ const DEFAULT_CONFIG = {
     });
   }
 
-  makeResizable(
-    document.getElementById('handle-left'),
-    document.getElementById('vab'),
-    'left'
-  );
-  makeResizable(
-    document.getElementById('handle-right'),
-    document.getElementById('status-panel'),
-    'right'
-  );
+  makeResizable(document.getElementById('handle-left'),  document.getElementById('vab'),          'left');
+  makeResizable(document.getElementById('handle-right'), document.getElementById('status-panel'), 'right');
 
   // ----------------------------------------------------------------
   // メニューバー — プルダウン開閉
   // ----------------------------------------------------------------
-  // クリックで .open を付け外し
   document.querySelectorAll('.menu-btn').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -317,12 +365,10 @@ const DEFAULT_CONFIG = {
     });
   });
 
-  // メニュー外クリックで全閉じ
   document.addEventListener('click', () => {
     document.querySelectorAll('.menu-item.open').forEach(el => el.classList.remove('open'));
   });
 
-  // ドロップダウン項目クリック後に閉じる
   document.querySelectorAll('.menu-dropdown button').forEach(btn => {
     btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -338,7 +384,7 @@ const DEFAULT_CONFIG = {
     panel.style.display  = visible ? 'none' : '';
     handle.style.display = visible ? 'none' : '';
     btnEl.textContent    = visible ? labelShow : labelHide;
-    map.invalidateSize();
+    map.resize();
   }
 
   document.getElementById('menu-toggle-vab').addEventListener('click', function () {
@@ -349,7 +395,6 @@ const DEFAULT_CONFIG = {
     togglePanel('status-panel', 'handle-right', this, 'Status を隠す', 'Status を表示');
   });
 
-  // Symbols > 全シンボル削除
   document.getElementById('menu-clear-symbols').addEventListener('click', () => {
     apiCall('DELETE', '/api/symbols');
   });
@@ -382,8 +427,6 @@ const DEFAULT_CONFIG = {
   // ----------------------------------------------------------------
   // VAB ボタン
   // ----------------------------------------------------------------
-
-  // setSymbol(label, lat, lon, type)
   document.getElementById('vab-set-btn').addEventListener('click', () => {
     const label = document.getElementById('vab-label').value.trim();
     const lat   = parseFloat(document.getElementById('vab-lat').value);
@@ -393,22 +436,18 @@ const DEFAULT_CONFIG = {
     apiCall('POST', '/api/symbols', { label, lat, lon, type });
   });
 
-  // removeSymbol(label)
   document.getElementById('vab-rm-btn').addEventListener('click', () => {
     const label = document.getElementById('vab-rm-label').value.trim();
     if (!label) { showFeedback('label is required', false); return; }
     apiCall('DELETE', `/api/symbols/${encodeURIComponent(label)}`);
   });
 
-  // clearSymbols()
   document.getElementById('vab-clear-btn').addEventListener('click', () => {
     apiCall('DELETE', '/api/symbols');
   });
 
   // ----------------------------------------------------------------
   // 4×4 カスタムボタングリッド
-  // 各ボタンは POST /api/btn/{n} を送る。
-  // C++ 側で server.addRoute("/api/btn/1", handler) を登録すれば動く。
   // ----------------------------------------------------------------
   const grid = document.getElementById('btn-grid');
   for (let n = 1; n <= 16; n++) {

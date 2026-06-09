@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Map</title>
-  <link rel="stylesheet" href="lib/leaflet.css"/>
+  <link rel="stylesheet" href="lib/maplibre-gl.css"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -18,6 +18,8 @@
         <ul class="menu-dropdown" id="view-menu-dropdown">
           <li><button id="menu-toggle-vab">VAB を隠す</button></li>
           <li><button id="menu-toggle-status">Status を隠す</button></li>
+          <li><button id="menu-toggle-terrain">3D地形 を無効化</button></li>
+          <li><button id="menu-reset-north">北向き・水平にリセット</button></li>
         </ul>
       </li>
 
@@ -123,7 +125,7 @@
 
   </div><!-- #main -->
 
-  <script src="lib/leaflet.js"></script>
+  <script src="lib/maplibre-gl.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
