@@ -373,7 +373,7 @@ if (cfg.overlay_url) {
 
 | 層 | タイルURL | 用途 | opacity |
 |---|---|---|---|
-| ベース | `/tiles/{z}/{x}/{y}.png` | JAXA 陰影起伏（地形把握） | 1.0 |
+| ベース | `/tiles/{z}/{x}/{y}.png` | JAXA カラーレリーフ（地形把握） | 1.0 |
 | オーバーレイ | `cyberjapandata.gsi.go.jp/...` | 建物・道路の輪郭 | 0.75 |
 
 `maxNativeZoom` は「実際のタイルが存在する最大ズーム」で、それを超えると Leaflet がそのタイルを拡大表示します。JAXA は zoom 13 まで、GSI は zoom 18 まで存在します。

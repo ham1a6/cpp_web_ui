@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate hillshaded elevation tiles from JAXA AW3D30 GeoTIFF data.
+Generate flat color-relief elevation tiles from JAXA AW3D30 GeoTIFF data.
 
 Uses the same GDAL pipeline as build_japan_tiles.sh but:
   - Does NOT delete existing tiles (safe to add zoom 11-12 beside zoom 5-10)
@@ -168,8 +168,6 @@ def main():
         merged_msk = tmp / 'merged_msk.vrt'
         masked_dsm = tmp / 'masked_dsm.tif'
         color_rel  = tmp / 'color_relief.tif'
-        hillshade  = tmp / 'hillshade.tif'
-        shaded_vrt = tmp / 'shaded_relief.vrt'
 
         # ---------------------------------------------------------------- #
         # 1. Merge all DSM/MSK files into virtual mosaics (no data copy).  #
@@ -206,70 +204,18 @@ def main():
             masked_dsm = merged_dsm   # skip ocean masking if no MSK
 
         # ---------------------------------------------------------------- #
-        # 3. Color relief and hillshade.                                    #
+        # 3. Color relief (flat colors, no hillshading).                    #
         # ---------------------------------------------------------------- #
-        print(f'\n[3/5] Color relief and hillshade...  {elapsed_str(t0)}')
+        print(f'\n[3/4] Color relief...  {elapsed_str(t0)}')
         run(['gdaldem', 'color-relief', '-q',
              '-co', 'COMPRESS=DEFLATE', '-co', 'TILED=YES',
              masked_dsm, COLOR_TABLE, color_rel])
-        run(['gdaldem', 'hillshade', '-q',
-             '-z', '1.5', '-az', '315', '-alt', '45', '-compute_edges',
-             '-co', 'COMPRESS=DEFLATE', '-co', 'TILED=YES',
-             merged_dsm, hillshade])
 
         # ---------------------------------------------------------------- #
-        # 4. Blend: color × sqrt(hillshade/255).                           #
-        #    Ocean pixels (MSK & 3 == 3) keep flat color (no hillshading). #
-        # ---------------------------------------------------------------- #
-        print(f'\n[4/5] Blending hillshade × color...  {elapsed_str(t0)}')
-        blend_expr = (
-            'numpy.where('
-            '(M.astype(numpy.int32) & 3) == 3, '
-            'C, '
-            'numpy.clip('
-            'C.astype(numpy.float32) * '
-            'numpy.sqrt(numpy.where(H > 0, H, 255).astype(numpy.float32) / 255.0),'
-            ' 0, 255)'
-            ').astype(numpy.uint8)'
-        )
-        blend_args_base = [
-            '-H', hillshade,
-            '-M', (merged_msk if msk_files else merged_msk),
-            '--type=Byte', '--overwrite', '--quiet',
-            '--co', 'COMPRESS=DEFLATE', '--co', 'TILED=YES',
-            '--calc', blend_expr,
-        ]
-
-        for band in (1, 2, 3):
-            out = tmp / f'blend_b{band}.tif'
-            run(['gdal_calc.py',
-                 '-C', color_rel, f'--C_band={band}',
-                 '--outfile', out,
-                 *blend_args_base])
-            print(f'  band {band} done  {elapsed_str(t0)}')
-
-        # Combine three single-band blends into an RGB VRT.
-        run(['gdalbuildvrt', '-separate', '-q',
-             shaded_vrt,
-             tmp / 'blend_b1.tif',
-             tmp / 'blend_b2.tif',
-             tmp / 'blend_b3.tif'])
-
-        # Set RGB color interpretations on the VRT so gdal2tiles sees RGB.
-        subprocess.run(['python3', '-W', 'ignore', '-c', f'''
-from osgeo import gdal
-ds = gdal.Open("{shaded_vrt}", gdal.GA_Update)
-ds.GetRasterBand(1).SetColorInterpretation(gdal.GCI_RedBand)
-ds.GetRasterBand(2).SetColorInterpretation(gdal.GCI_GreenBand)
-ds.GetRasterBand(3).SetColorInterpretation(gdal.GCI_BlueBand)
-ds.FlushCache()
-'''], check=True)
-
-        # ---------------------------------------------------------------- #
-        # 5. Generate XYZ PNG tiles.                                        #
+        # 4. Generate XYZ PNG tiles.                                        #
         #    --resume skips tiles that already exist on disk.               #
         # ---------------------------------------------------------------- #
-        print(f'\n[5/5] Generating tiles (zoom {args.zoom_min}-{args.zoom_max}, '
+        print(f'\n[4/4] Generating tiles (zoom {args.zoom_min}-{args.zoom_max}, '
               f'{NCPU} cores)...  {elapsed_str(t0)}')
         TILES_DIR.mkdir(parents=True, exist_ok=True)
         run(['gdal2tiles.py',
@@ -279,7 +225,7 @@ ds.FlushCache()
              '--resampling=bilinear',
              '--webviewer=none',
              '--resume',
-             shaded_vrt,
+             color_rel,
              TILES_DIR])
 
     # Report

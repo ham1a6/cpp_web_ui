@@ -500,12 +500,9 @@ GDAL による全 Japan シームレス陰影起伏タイルの生成手順:
 
 ```
 DSM (1°×1° GeoTIFF × 390)
-  └─ gdalbuildvrt      → merged_dsm.vrt  (VRT: データコピーなし)
-  └─ gdal_calc.py      → masked_dsm.tif  (MSK bit 0x03 → nodata -9999)
-  └─ gdaldem hillshade → hillshade.tif   (陰影起伏, z=1.5, az=315, alt=45)
+  └─ gdalbuildvrt    → merged_dsm.vrt  (VRT: データコピーなし)
+  └─ gdal_calc.py    → masked_dsm.tif  (MSK bit 0x03 → nodata -9999)
   └─ gdaldem color-relief → color_relief.tif (scripts/color_table.txt)
-  └─ gdal_calc.py      → blend_b{1,2,3}.tif (C × √(H/255), 海域はフラット)
-  └─ gdalbuildvrt -separate → shaded_relief.vrt (RGB 結合)
   └─ gdal2tiles.py --xyz --resume → web/tiles/{z}/{x}/{y}.png
 ```
 
