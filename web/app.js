@@ -53,6 +53,7 @@ const DEFAULT_CONFIG = {
       maxZoom:           cfg.max_zoom,
       updateWhenZooming: false,
       keepBuffer:        2,
+      errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
     }).addTo(map);
 
     // タイルロード失敗を検知してメニューバーに警告

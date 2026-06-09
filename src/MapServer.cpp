@@ -320,6 +320,7 @@ struct MapServer::Impl {
 
         // Overlay tile proxy — fetches external tiles server-side so the browser
         // only needs localhost access regardless of network restrictions.
+        // Tiles are persisted to web_root/overlay-tiles/ for offline reuse.
         if (overlay_upstream.valid) {
             svr.Get(R"(/overlay-tiles/(\d+)/(\d+)/(\d+))",
                     [this](const httplib::Request& req, httplib::Response& res) {
@@ -330,7 +331,18 @@ struct MapServer::Impl {
                 const std::string path = fillTileTemplate(
                     overlay_upstream.path_tpl, z, x, y);
 
-                // Return cached tile if available
+                // 1. Check local disk (pre-downloaded or previously cached)
+                if (!web_root.empty()) {
+                    for (const auto* ext : {".png", ".jpg"}) {
+                        auto f = web_root / "overlay-tiles" / z / x / (y + ext);
+                        if (fs::exists(f)) {
+                            serveFile(req, res, f, /*isTile=*/true);
+                            return;
+                        }
+                    }
+                }
+
+                // 2. Return in-memory cached tile if available
                 {
                     std::lock_guard<std::mutex> lk(overlay_cache_mtx);
                     auto it = overlay_tile_cache.find(path);
@@ -344,7 +356,7 @@ struct MapServer::Impl {
                     }
                 }
 
-                // Fetch tile from upstream
+                // 3. Fetch tile from upstream
                 std::string body;
                 std::string content_type = "image/png";
                 bool ok = false;
@@ -377,9 +389,24 @@ struct MapServer::Impl {
                     }
                 }
 
-                if (!ok) { res.status = 502; return; }
+                // Return 404 on failure — Leaflet's errorTileUrl shows a
+                // transparent placeholder tile instead of a broken-image icon.
+                if (!ok) { res.status = 404; return; }
 
-                // Store in cache (clear all on overflow — simple eviction)
+                // 4. Persist to disk for offline use on next server restart
+                if (!web_root.empty()) {
+                    const std::string ext =
+                        (content_type.find("jpeg") != std::string::npos) ? ".jpg" : ".png";
+                    auto dir = web_root / "overlay-tiles" / z / x;
+                    std::error_code ec;
+                    fs::create_directories(dir, ec);
+                    if (!ec) {
+                        std::ofstream out(dir / (y + ext), std::ios::binary);
+                        if (out) out.write(body.data(), body.size());
+                    }
+                }
+
+                // 5. Store in memory cache (clear all on overflow — simple eviction)
                 {
                     std::lock_guard<std::mutex> lk(overlay_cache_mtx);
                     if (overlay_tile_cache.size() >= OVERLAY_CACHE_MAX)

@@ -364,6 +364,7 @@ if (cfg.overlay_url) {
     opacity:       cfg.overlay_opacity ?? 0.75,  // 建物・道路が見えやすい不透明度
     maxNativeZoom: 18,   // GSI タイルはズーム 18 まで存在
     maxZoom:       cfg.max_zoom,
+    errorTileUrl:  'data:image/gif;base64,...',  // タイル取得失敗時の透明フォールバック
   }).addTo(map);
 }
 ```
@@ -396,6 +397,10 @@ map.on('zoomend', () => {
   document.getElementById('menubar-zoom').textContent = `Z${map.getZoom()}`;
 });
 ```
+
+**オフライン時のタイル表示**
+
+オーバーレイの `errorTileUrl` に 1×1 ピクセルの透明 GIF を設定しているため、タイルが存在しない（404）場合でもブラウザは「×」アイコンではなく空白タイルを表示します。C++ サーバーが `web/overlay-tiles/` にキャッシュ済みのタイルを自動的に配信するため、一度閲覧したエリアはインターネット不要になります。`scripts/download_overlay_tiles.py` で事前にまとめてダウンロードすると完全オフラインで運用できます。
 
 GSI タイルロード失敗（ネットワーク断等）は `overlayLayer.on('tileerror', ...)` で検知し、`conn-label` に 5 秒間警告を表示します。
 

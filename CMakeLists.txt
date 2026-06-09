@@ -51,8 +51,24 @@ if(CPP_WEB_UI_BUILD_EXAMPLES)
     target_compile_options(shm_writer PRIVATE -O2 -Wall)
 endif()
 
-# ---- Tile generation (opt-in via `cmake --build . --target generate_tiles`) #
+# ---- Overlay tile download (offline use) ------------------------------------
 find_program(PYTHON3 python3)
+if(PYTHON3)
+    add_custom_target(download_overlay_tiles
+        COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/download_overlay_tiles.py
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Downloading GSI pale-map overlay tiles for offline use (zoom 5-10, all Japan)"
+        USES_TERMINAL
+    )
+    add_custom_target(download_overlay_tiles_dryrun
+        COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/download_overlay_tiles.py --dry-run
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Overlay tile download plan (no files written)"
+        USES_TERMINAL
+    )
+endif()
+
+# ---- Tile generation (opt-in via `cmake --build . --target generate_tiles`) #
 if(PYTHON3)
     add_custom_target(generate_tiles_11
         COMMAND ${PYTHON3} ${CMAKE_SOURCE_DIR}/scripts/generate_tiles.py 11 11
