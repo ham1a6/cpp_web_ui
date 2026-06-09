@@ -30,15 +30,24 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <thread>
 
-int main() {
+int main(int argc, char* argv[]) {
     cpp_web_ui::MapConfig cfg;
-    cfg.port         = 9000;
+    cfg.port         = argc > 1 ? std::atoi(argv[1]) : 9000;
     cfg.title        = "Button Demo";
     cfg.center_lat   = 35.690;
-    cfg.center_lon   = 139.692;
-    cfg.initial_zoom = 8;
+    cfg.center_lon   = 139.700;
+    cfg.initial_zoom = 14;   // zoom 14+ shows streets; 16+ shows individual buildings
+
+    // GSI pale map overlay proxied through this server — works even when the
+    // browser cannot reach external servers directly.
+    cfg.overlay_url         = "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png";
+    cfg.overlay_attribution = "<a href='https://maps.gsi.go.jp/development/ichiran.html'"
+                              " target='_blank'>国土地理院</a>";
+    cfg.overlay_opacity = 0.75;
+    cfg.max_zoom        = 18;  // allow zooming to building level
 
     cpp_web_ui::MapServer server(cfg);
 
