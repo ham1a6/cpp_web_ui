@@ -37,21 +37,18 @@ target_compile_definitions(cpp_web_ui PRIVATE
     CPP_WEB_UI_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"
 )
 
-# ---- Executables -----------------------------------------------------------
-add_executable(map_server src/map_server.cpp)
-target_link_libraries(map_server PRIVATE cpp_web_ui)
-target_compile_options(map_server PRIVATE -O2 -Wall)
-
-add_executable(shm_writer src/shm_writer.cpp)
-target_link_libraries(shm_writer PRIVATE cpp_web_ui m)
-target_compile_options(shm_writer PRIVATE -O2 -Wall)
-
 # ---- Examples (opt-in) -----------------------------------------------------
+# simple_usage : in-process API demo (addRoute, setSymbol, overlay tiles)
+# shm_writer   : ShmPublisher demo — run alongside simple_usage
 option(CPP_WEB_UI_BUILD_EXAMPLES "Build example programs" OFF)
 if(CPP_WEB_UI_BUILD_EXAMPLES)
     add_executable(simple_usage examples/simple_usage.cpp)
     target_link_libraries(simple_usage PRIVATE cpp_web_ui)
     target_compile_options(simple_usage PRIVATE -O2 -Wall)
+
+    add_executable(shm_writer examples/shm_writer.cpp)
+    target_link_libraries(shm_writer PRIVATE cpp_web_ui m)
+    target_compile_options(shm_writer PRIVATE -O2 -Wall)
 endif()
 
 # ---- Tile generation (opt-in via `cmake --build . --target generate_tiles`) #
@@ -81,10 +78,9 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-install(TARGETS cpp_web_ui map_server shm_writer
+install(TARGETS cpp_web_ui
     EXPORT   cpp_web_ui_targets
     ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 # Public headers

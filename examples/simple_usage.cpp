@@ -26,6 +26,7 @@
 //  カスタムエンドポイントは addRoute() で自由に追加できる。
 
 #include <cpp_web_ui/MapServer.hpp>
+#include <shared_types.h>   // SHM_NAME — for pairing with shm_writer
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -48,6 +49,10 @@ int main(int argc, char* argv[]) {
                               " target='_blank'>国土地理院</a>";
     cfg.overlay_opacity = 0.75;
     cfg.max_zoom        = 18;  // allow zooming to building level
+
+    // Optional: also accept position updates from shm_writer running in another process.
+    // If shm_writer is not running, this has no effect.
+    cfg.shm_name = SHM_NAME;
 
     cpp_web_ui::MapServer server(cfg);
 

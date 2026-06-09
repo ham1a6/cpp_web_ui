@@ -3,8 +3,8 @@
 #include <cstdio>
 #include <unistd.h>
 
-// Demo: simulates 15 moving symbols across Japan using ShmPublisher.
-// Run alongside map_server (which must have shm_name configured).
+// Example: ShmPublisher — feed position data from a separate process.
+// Run alongside simple_usage (or any server with shm_name = SHM_NAME).
 
 static const struct { const char* label; const char* type; double lat, lon; }
 INITIAL[] = {
