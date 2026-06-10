@@ -460,34 +460,44 @@ C++ の `std::format("<b>{}</b><br>{:.5f}", label, lat)` に相当します。
 
 ### 4-10. `updateSymbols` — マーカーの差分更新
 
+MapLibre GL JS のマーカーは `maplibregl.Marker` オブジェクト。  
+座標の指定順が **[lon, lat]**（Leaflet の [lat, lon] と逆）なので注意。
+
 ```js
+// markers: label → { marker: maplibregl.Marker, el: HTMLElement }
+const markers = new Map();
+
 function updateSymbols(symbols) {
   const seen = new Set();
 
-  // 受信したシンボルを処理
   for (const sym of symbols) {
     seen.add(sym.label);
 
     if (markers.has(sym.label)) {
-      // 既存マーカー → 座標とアイコンだけ更新
-      const m = markers.get(sym.label);
-      m.setLatLng([sym.lat, sym.lon]);
-      m.setIcon(makeIcon(sym));
+      // 既存マーカー → 座標とスタイルだけ更新
+      const { marker, el } = markers.get(sym.label);
+      marker.setLngLat([sym.lon, sym.lat]);  // ← [lon, lat] 順!
+      el.className = `sym-icon ${sym.type}`; // CSS クラスで色を変える
+      marker.getPopup().setHTML(popupHtml(sym));
     } else {
-      // 新規マーカー → 作成して地図に追加
-      const m = L.marker([sym.lat, sym.lon], { icon: makeIcon(sym) })
-        .bindPopup(`<b>${sym.label}</b>`)
-        .addTo(map);
-      markers.set(sym.label, m);
+      // 新規マーカー → カスタム DOM 要素で作成
+      const el = document.createElement('div');
+      el.className = `sym-icon ${sym.type}`;
+      el.textContent = sym.label.slice(0, 2).toUpperCase();  // イニシャル
+
+      const popup = new maplibregl.Popup({ offset: 18 })
+                      .setHTML(`<b>${sym.label}</b>`);
+      const marker = new maplibregl.Marker({ element: el })
+                       .setLngLat([sym.lon, sym.lat])  // ← [lon, lat] 順!
+                       .setPopup(popup)
+                       .addTo(map);
+      markers.set(sym.label, { marker, el });
     }
   }
 
   // 受信リストにいないマーカー → 削除
-  for (const [label, m] of markers) {
-    if (!seen.has(label)) {
-      m.remove();
-      markers.delete(label);
-    }
+  for (const [label, { marker }] of markers) {
+    if (!seen.has(label)) { marker.remove(); markers.delete(label); }
   }
 }
 ```
@@ -501,13 +511,13 @@ void updateSymbols(const std::vector<Symbol>& symbols) {
         seen.insert(sym.label);
         auto it = markers.find(sym.label);
         if (it != markers.end()) {
-            it->second.setPosition(sym.lat, sym.lon);
+            it->second.marker.setLngLat(sym.lon, sym.lat);
         } else {
-            markers[sym.label] = createMarker(sym);
+            markers[sym.label] = createMarker(sym.lon, sym.lat);
         }
     }
     for (auto it = markers.begin(); it != markers.end(); ) {
-        if (!seen.count(it->first)) { it->second.remove(); it = markers.erase(it); }
+        if (!seen.count(it->first)) { it->second.marker.remove(); it = markers.erase(it); }
         else ++it;
     }
 }

@@ -213,11 +213,11 @@ int main() {
 | `center_lat` | `double` | `36.0` | 地図の初期中心緯度 |
 | `center_lon` | `double` | `137.5` | 地図の初期中心経度 |
 | `initial_zoom` | `int` | `6` | 地図の初期ズームレベル |
-| `tile_url` | `string` | `"/tiles/{z}/{x}/{y}.png"` | Leaflet タイル URL テンプレート |
+| `tile_url` | `string` | `"/tiles/{z}/{x}/{y}.png"` | タイル URL テンプレート |
 | `tile_attribution` | `string` | `"Elevation: © JAXA AW3D30"` | 地図の著作権表示 |
 | `min_zoom` | `int` | `5` | 最小ズームレベル |
-| `max_zoom` | `int` | `11` | 最大ズームレベル (UI 操作上限) |
-| `max_native_zoom` | `int` | `10` | タイルが実在する最大ズームレベル。`max_zoom` を超えた場合このレベルのタイルを拡大表示 |
+| `max_zoom` | `int` | `-1` | 最大ズームレベル (UI 操作上限)。`-1` = `max_native_zoom` に合わせる |
+| `max_native_zoom` | `int` | `-1` | タイルが実在する最大ズームレベル。`-1` = 起動時に `web/tiles/` を走査して自動検出 |
 | `title` | `string` | `"Map"` | ページタイトルとサイドバー見出し |
 
 **外部タイルサーバーを使う例:**
@@ -425,87 +425,81 @@ struct SharedMapData {
 
 ### 概要
 
-`web/tiles/` 以下に JAXA AW3D30 (30m メッシュ数値標高モデル) から生成した陰影起伏図タイルを収録しています。  
+`web/tiles/` 以下に JAXA AW3D30 (30m メッシュ数値標高モデル) から生成したカラーレリーフタイルを収録しています。  
 タイル形式は **XYZ / Slippy map** (Web Mercator / EPSG:3857)。
+
+`web/terrain-rgb/` 以下に同データから生成した Terrarium 標高エンコードタイルを収録しています（MapLibre GL JS の 3D 地形用）。
 
 ### 収録範囲・枚数
 
-| ズームレベル | タイル数 | サイズ | 地理的範囲 (概算) |
-|---|---|---|---|
-| 5 | 20 | 416 KB | 112.5°E–157.5°E / 11°N–56°N |
-| 6 | 48 | 1.5 MB | 118°E–152°E / 17°N–52°N |
-| 7 | 168 | 5.9 MB | 118°E–152°E / 19°N–50°N |
-| 8 | 616 | 24 MB | 120°E–150°E / 19°N–50°N |
-| 9 | 2,376 | 95 MB | 120°E–150°E / 20°N–50°N |
-| 10 | 9,202 | 389 MB | 120°E–150°E / 20°N–50°N |
-| **合計** | **12,430** | **514 MB** | |
+`generate_tiles.py` / `generate_terrain_rgb.py` で生成 (JAXA AW3D30、日本全域 20–46°N / 122–155°E):
 
-> **注意**: ズームレベル 5 のみ遠隔離島（東端 ~157°E）まで広くカバーしています。ズーム 6 以上では日本本土・近海を中心とした範囲になります。
+| ズームレベル | 地上分解能 (35°N) | tiles/タイル数 | terrain-rgb/タイル数 |
+|---|---|---|---|
+| 5 | ~4,000 m/px | 20 | 20 |
+| 6 | ~2,000 m/px | 48 | 48 |
+| 7 | ~1,000 m/px | 168 | 168 |
+| 8 | ~500 m/px | 616 | 616 |
+| 9 | ~250 m/px | 2,376 | 2,376 |
+| 10 | ~125 m/px | 9,202 | 9,202 |
+| 11 | ~63 m/px | 36,808 | 36,808 |
+| **12** | **~31 m/px ← ネイティブ** | *(generate_tiles.py 11 12)* | 146,034 |
+
+zoom 12 カラーレリーフタイルは必要に応じて追加生成（約 8 GB / 2 時間）。  
+`max_native_zoom` は起動時に `web/tiles/` を走査して自動検出されます。
 
 ### 元データ (JAXA AW3D30)
 
 ```
 map/
-  N020E120_N025E125/   ← 5°×5° ブロック (32 ブロック、計 1,170 GeoTIFF ファイル)
+  N020E120_N025E125/   ← 5°×5° ブロック (32 ブロック、計 390 GeoTIFF ファイル)
   N020E125_N025E130/
   ...
   N045E145_N050E150/
     ALPSMLC30_N0xxEyyy_DSM.tif   ← 数値標高モデル (1°×1°)
-    ALPSMLC30_N0xxEyyy_MSK.tif   ← マスク
-    ALPSMLC30_N0xxEyyy_STK.tif   ← スタック
+    ALPSMLC30_N0xxEyyy_MSK.tif   ← 水域マスク
 ```
 
-元データはJAXA地球観測研究センターから取得: https://www.eorc.jaxa.jp/ALOS/en/alos-3/a3_dataset.htm
+元データは JAXA 地球観測研究センターから取得: https://www.eorc.jaxa.jp/ALOS/en/alos-3/a3_dataset.htm
 
-### ズームレベルと解像度
-
-| ズームレベル | 地上分解能 (35°N) | 備考 |
-|---|---|---|
-| 5–10 | ~125 m/px | 既存タイル (OSM から取得) |
-| 11 | ~63 m/px | JAXA ネイティブに接近 |
-| **12** | **~31 m/px** | **← JAXA AW3D30 ネイティブ解像度** |
-| 13–14 | <16 m/px | センサー以上 (Leaflet が zoom 12 タイルを拡大表示) |
-
-`max_native_zoom` は **サーバー起動時に `web/tiles/` を走査して自動検出**されます。  
-zoom 11-12 タイルを生成して `map_server` を再起動すると `/api/config` の `max_native_zoom` が自動的に更新されます。
-
-### zoom 11-12 タイル生成
+### タイル生成
 
 ```bash
 # 必要パッケージ (Ubuntu/Debian)
 sudo apt install gdal-bin python3-gdal python3-numpy
 
-# 生成計画を確認 (実行なし)
+# ---- カラーレリーフタイル (web/tiles/) --------------------------------
+# 計画確認 (実行なし)
 python3 scripts/generate_tiles.py --dry-run
 
-# zoom 11 のみ (~1.5 GB, ~30 分)
-cmake --build build --target generate_tiles_11
-# または直接:
+# zoom 11 (~1.5 GB, ~30 分)
 python3 scripts/generate_tiles.py 11 11
-
 # zoom 11-12 (~8 GB, ~2 時間)
-cmake --build build --target generate_tiles_12
-# または直接:
 python3 scripts/generate_tiles.py 11 12
 
-# 生成後: サーバーを再起動すると max_native_zoom が自動更新
-./build/map_server
-# → cpp_web_ui: tiles detected max_native_zoom=12  max_zoom=14
+# ---- 3D 地形タイル (web/terrain-rgb/) ---------------------------------
+# 計画確認 (実行なし)
+python3 scripts/generate_terrain_rgb.py --dry-run
+
+# zoom 5-12 (~1 GB, ~20 分)
+python3 scripts/generate_terrain_rgb.py
+
+# CMake ターゲット経由でも実行可能
+cmake --build build --target generate_tiles_11
+cmake --build build --target generate_terrain_rgb
 ```
 
 スクリプトは既存タイルを削除しません (`--resume`)。  
-zoom 5-10 の既存タイルをそのまま保持しつつ zoom 11-12 を追加します。
+生成後にサーバーを再起動すると `max_native_zoom` が自動更新されます。
 
-### 生成パイプライン
-
-GDAL による全 Japan シームレス陰影起伏タイルの生成手順:
+### カラーレリーフ生成パイプライン
 
 ```
 DSM (1°×1° GeoTIFF × 390)
-  └─ gdalbuildvrt    → merged_dsm.vrt  (VRT: データコピーなし)
-  └─ gdal_calc.py    → masked_dsm.tif  (MSK bit 0x03 → nodata -9999)
-  └─ gdaldem color-relief → color_relief.tif (scripts/color_table.txt)
-  └─ gdal2tiles.py --xyz --resume → web/tiles/{z}/{x}/{y}.png
+  └─ gdalbuildvrt         → merged_dsm.vrt     (仮想モザイク)
+  └─ gdal_calc.py         → masked_dsm.tif     (MSK bit 0x03 → nodata)
+  └─ gdaldem color-relief → color_relief.tif   (color_table.txt 参照)
+  └─ gdal2tiles.py --xyz  → web/tiles/{z}/{x}/{y}.png
 ```
 
 ### オーバーレイタイルの事前ダウンロード（完全オフライン化）
@@ -527,8 +521,6 @@ cmake --build build --target download_overlay_tiles
 python3 scripts/download_overlay_tiles.py --zoom 11-16 --bbox 35.3,138.8,36.2,140.3
 ```
 
-スクリプトのデフォルト設定:
-
 | パラメータ | 値 |
 |---|---|
 | バウンディングボックス | 20°N–46°N / 122°E–155°E (南鳥島を含む日本全域) |
@@ -538,26 +530,6 @@ python3 scripts/download_overlay_tiles.py --zoom 11-16 --bbox 35.3,138.8,36.2,14
 ダウンロード済みタイルは `web/overlay-tiles/{z}/{x}/{y}.png` に保存され、  
 サーバー起動後はインターネットなしで自動的に配信されます。  
 タイルが存在しないズーム帯は透明タイルで補完（地図表示は継続）。
-
-### OSM タイルのダウンロード (代替)
-
-ローカルタイルの代わりに OpenStreetMap タイルを使う場合:
-
-```bash
-# カバレッジ確認 (dry-run)
-python3 scripts/download_tiles.py --dry-run
-
-# 実ダウンロード (OSM タイル使用ポリシーを遵守してください)
-python3 scripts/download_tiles.py
-```
-
-スクリプトのデフォルト設定:
-
-| パラメータ | 値 |
-|---|---|
-| バウンディングボックス | 20°N–46°N / 122°E–155°E (南鳥島を含む日本全域) |
-| ズームレベル | 5–10 |
-| タイルサーバー | `https://tile.openstreetmap.org/{z}/{x}/{y}.png` |
 
 ---
 
@@ -808,9 +780,7 @@ cpp_web_ui/
 ├── scripts/
 │   ├── generate_tiles.py           ← JAXA GeoTIFF → カラーレリーフ PNG タイル生成
 │   ├── generate_terrain_rgb.py     ← JAXA GeoTIFF → Terrarium 標高 PNG タイル生成 (3D 地形用)
-│   ├── download_tiles.py           ← OSM タイルダウンロードスクリプト (zoom 5-10)
 │   ├── download_overlay_tiles.py   ← GSI オーバーレイタイル事前ダウンロード
-│   ├── build_japan_tiles.sh        ← bash 版タイル全量生成スクリプト
 │   └── color_table.txt             ← gdaldem color-relief カラーランプ
 ├── cmake/
 │   └── cpp_web_ui-config.cmake.in

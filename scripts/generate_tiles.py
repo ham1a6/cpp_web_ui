@@ -2,10 +2,12 @@
 """
 Generate flat color-relief elevation tiles from JAXA AW3D30 GeoTIFF data.
 
-Uses the same GDAL pipeline as build_japan_tiles.sh but:
-  - Does NOT delete existing tiles (safe to add zoom 11-12 beside zoom 5-10)
-  - Flexible zoom range as command-line arguments
-  - --resume skips tiles that already exist
+Pipeline (4 steps):
+  1. gdalbuildvrt  — merge all 1°×1° DSM/MSK GeoTIFFs into virtual mosaics
+  2. gdal_calc.py  — ocean masking (MSK bit 0x03 → nodata -9999)
+  3. gdaldem       — color-relief (scripts/color_table.txt)
+  4. gdal2tiles.py — XYZ PNG tiles (--resume safe to add zoom levels)
+
 
 JAXA AW3D30 resolution vs zoom level (at 35°N):
   zoom 10: ~125 m/px  (coarser than sensor)
