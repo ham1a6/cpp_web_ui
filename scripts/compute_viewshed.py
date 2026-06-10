@@ -260,6 +260,10 @@ def compute(params: dict) -> dict:
     sys.stderr.write('\n')
 
     # ---- Build triangular mesh ----
+    # Only the outer boundary surface is generated — no closing faces to the
+    # radar apex or ground.  Closing faces (bottom/top fans, side walls) made
+    # the volume look like a cylinder; the open shell better represents the
+    # 3-D region that radar beams pass through.
     vertices:  list[list[float]] = []
     triangles: list[list[int]]   = []
 
@@ -270,43 +274,19 @@ def compute(params: dict) -> dict:
             idx[i][j] = len(vertices)
             vertices.append(grid[i][j])
 
-    # Apex vertex = radar position
-    apex = len(vertices)
-    vertices.append([lon0, lat0, h_asl0])
-
     def col_next(i: int) -> int:
         """Next azimuth column index (wraps for full circle)."""
         return (i + 1) % n_az if full_circle else i + 1
 
     az_range = range(n_az) if full_circle else range(n_az - 1)
 
-    # Outer surface (between adjacent az/el rays)
+    # Outer boundary surface only (open shell)
     for i in az_range:
         ni = col_next(i)
         for j in range(n_el - 1):
             a, b = idx[i][j],   idx[ni][j]
             c, d = idx[i][j+1], idx[ni][j+1]
             triangles += [[a, b, d], [a, d, c]]
-
-    if not full_circle:
-        # Bottom edge → apex (min elevation sweep)
-        for i in range(n_az - 1):
-            triangles.append([apex, idx[i][0], idx[i+1][0]])
-        # Top edge → apex (max elevation sweep)
-        for i in range(n_az - 1):
-            triangles.append([apex, idx[i+1][n_el-1], idx[i][n_el-1]])
-        # Left side (az_min) → apex
-        for j in range(n_el - 1):
-            triangles.append([apex, idx[0][j], idx[0][j+1]])
-        # Right side (az_max) → apex
-        for j in range(n_el - 1):
-            triangles.append([apex, idx[n_az-1][j+1], idx[n_az-1][j]])
-    else:
-        # Full circle: close top and bottom with apex fan
-        for i in az_range:
-            ni = col_next(i)
-            triangles.append([apex, idx[i][0],       idx[ni][0]])
-            triangles.append([apex, idx[ni][n_el-1], idx[i][n_el-1]])
 
     return {
         'vertices':  vertices,
