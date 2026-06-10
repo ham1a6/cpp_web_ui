@@ -858,3 +858,123 @@ element.addEventListener('click', () => {
 ```
 
 C++ の Qt シグナル/スロットやコールバック登録に相当します。
+
+---
+
+### 4-15. レーダー覆域（3D Viewshed）
+
+VAB の Radar セクションから、指定した地点のレーダー探知可能領域（覆域）を 3D メッシュで表示できます。
+
+**全体の流れ**
+
+```
+ブラウザ (app.js)                        C++ (MapServer)              Python
+───────────────────────────────────────────────────────────────────────────
+POST /api/viewshed  ──────────────────►  runPython()
+{lat, lon, ...}                          ↓
+                                         python3 compute_viewshed.py
+                                         ← stdin: パラメータ JSON
+                                         → stdout: メッシュ JSON
+◄──────────────────────────────────────  {vertices, triangles, meta}
+new RadarCoverageLayer(id, mesh, color)
+map.addLayer(layer)
+```
+
+**`compute_viewshed.py` — レイトレーシングの仕組み**
+
+```
+レーダー位置 (lat0, lon0, h_asl0)
+  │
+  ├── Az 0° ─ 360°（az_step_deg 刻み）
+  │     └── El el_min° ─ el_max°（el_step_deg 刻み）
+  │           └── trace_ray(): 地平線まで ray を飛ばす
+  │                 h_ray = h0 + r·sin(el) − r²/(2·R_eff)
+  │                              └─ 大気屈折補正（実効地球半径 R_eff = 4/3·R_earth）
+  │                 地形タイル(Terrarium)で標高を取得
+  │                 地形より ray が低くなったら打ち切り → terrain_hit
+  └── (n_az × n_el) の格子点 → 三角形メッシュ化（外表面のみ）
+```
+
+**大気屈折補正の意味**
+
+平坦な大地でも電波は地表に沿って曲がる（標準大気でほぼ 4/3 倍に見える）。  
+`R_eff = (4/3) × 6,371km ≈ 8,493km` を使うことで、実際の探知距離に近い値が得られます。
+
+```python
+R_EFF = R_EARTH * 4.0 / 3.0   # 8493000 m
+h_ray = h0 + r * sin(el) - r**2 / (2 * R_EFF)
+```
+
+C++ の物理計算で言えば「等価地球半径モデル」の実装です。
+
+**`RadarCoverageLayer` — WebGL カスタムレイヤー**
+
+MapLibre GL JS の `CustomLayerInterface` を実装したクラスです。  
+C++ の「純粋仮想関数を持つ基底クラスを継承する」感覚に相当します。
+
+```js
+class RadarCoverageLayer {
+  constructor(id, meshData, color) {
+    this.id   = id;
+    this.type = 'custom';
+    this.renderingMode = '3d';   // MapLibre に 3D レイヤーだと伝える
+  }
+
+  onAdd(map, gl) {
+    // シェーダーをコンパイル
+    // 頂点を MercatorCoordinate に変換して VBO に格納
+    // インデックスを IBO に格納
+  }
+
+  render(gl, matrix) {
+    // drawElements(TRIANGLES, ...) で描画
+  }
+}
+```
+
+**MercatorCoordinate — 3D 描画用の座標変換**
+
+```js
+const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], altMeters);
+// mc.x, mc.y, mc.z が WebGL の model 座標系に対応
+```
+
+MapLibre は内部で Mercator 座標（0〜1 の正規化）を使います。  
+高度は `altInMeters` を指定すると自動でスケール変換されます。
+
+**メッシュの構造（開いたシェル）**
+
+```
+n_az 方位 × n_el 仰角 の格子点をすべて頂点にする。
+隣接する格子点を 2 つの三角形（クワッド）で繋ぐ。
+閉じた面（頂点に向かうファン、底面、上面）は作らない。
+
+→ 外側の表面だけの「開いたシェル」になる
+→ レーダービームが通過する空間の境界面として視覚化できる
+```
+
+閉じた面を作ると円柱状に見えてしまうため、意図的に省いています。
+
+**複数レーダーの表示**
+
+```js
+const radarLayers = new Map();   // layerId → { layer, color }
+const RADAR_COLORS = ['#00ffff', '#ff8800', ...];  // 最大 6 色
+
+function addRadar(params) {
+  const res  = await apiCall('POST', '/api/viewshed', params);
+  const lid  = `radar-${Date.now()}`;
+  const color = RADAR_COLORS[radarLayers.size % RADAR_COLORS.length];
+  const layer = new RadarCoverageLayer(lid, res, color);
+  map.addLayer(layer);
+  radarLayers.set(lid, { layer, color });
+}
+
+function removeRadar(lid) {
+  map.removeLayer(lid);
+  radarLayers.delete(lid);
+}
+```
+
+各レーダーは独立した WebGL レイヤーとして追加されます。  
+`Date.now()` をレイヤー ID に使うことで一意性を保証しています。
