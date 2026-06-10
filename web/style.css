@@ -431,3 +431,32 @@ h2 {
 .sym-icon.enemy    { background: #bd0000; border-color: #ff4444; }
 .sym-icon.neutral  { background: #9a8000; border-color: #ffcc00; }
 .sym-icon.unknown  { background: #555555; border-color: #888888; }
+
+/* ================================================================
+   レーダー覆域 UI
+   ================================================================ */
+.radar-icon {
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  border: 3px solid #00d4ff;
+  background: rgba(0,212,255,0.25);
+  box-shadow: 0 0 8px rgba(0,212,255,0.6);
+  cursor: pointer;
+}
+
+.radar-list-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 0;
+  font-size: 11px; color: #ccc;
+}
+.radar-swatch {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.radar-rm-btn {
+  margin-left: auto;
+  background: none; border: none;
+  color: #ff5555; cursor: pointer;
+  font-size: 12px; padding: 0 2px;
+}
+.radar-rm-btn:hover { color: #fff; }

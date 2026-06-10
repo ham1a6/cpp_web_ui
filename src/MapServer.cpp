@@ -21,6 +21,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
@@ -64,6 +65,41 @@ static std::string makeETag(const fs::path& p) {
     char buf[64];
     std::snprintf(buf, sizeof(buf), "\"%zx-%llx\"", sz, (unsigned long long)mtime);
     return buf;
+}
+
+// Run a Python script with JSON on stdin; return stdout as string.
+// Returns empty string on failure.  Script path must be absolute.
+static std::string runPython(const fs::path& script, const std::string& stdin_json) {
+    // Write stdin to a unique temp file
+    char tmp_in[]  = "/tmp/cwu_vs_in_XXXXXX";
+    char tmp_out[] = "/tmp/cwu_vs_out_XXXXXX";
+
+    int fd_in = mkstemp(tmp_in);
+    if (fd_in < 0) return "";
+    {
+        const char* p = stdin_json.c_str();
+        ssize_t rem   = (ssize_t)stdin_json.size();
+        while (rem > 0) { ssize_t n = ::write(fd_in, p, rem); if (n <= 0) break; p += n; rem -= n; }
+    }
+    ::close(fd_in);
+
+    int fd_out = mkstemp(tmp_out);
+    if (fd_out < 0) { ::unlink(tmp_in); return ""; }
+    ::close(fd_out);
+
+    // python3 script.py < tmp_in > tmp_out 2>/dev/null
+    std::string cmd = "python3 " + script.string()
+                    + " < " + tmp_in
+                    + " > " + tmp_out
+                    + " 2>/dev/null";
+    int rc = std::system(cmd.c_str());
+
+    std::string result;
+    if (rc == 0) result = readFile(tmp_out);
+
+    ::unlink(tmp_in);
+    ::unlink(tmp_out);
+    return result;
 }
 
 static void serveFile(const httplib::Request& req, httplib::Response& res,
@@ -308,6 +344,49 @@ struct MapServer::Impl {
             { std::lock_guard lk(sym_mu); symbols.erase(lbl); shm_labels.erase(lbl); }
             broadcastSnapshot();
             res.set_content("{}", "application/json");
+        });
+
+        // Viewshed / 3-D radar coverage computation
+        // POST body: { lat, lon, height_agl, range_km, az_min, az_max,
+        //              el_min, el_max [, az_step, el_step, ray_step_m] }
+        // Response:  { vertices:[[lon,lat,alt],...], triangles:[[i,j,k],...], meta:{...} }
+        //            or { error: "..." }
+        svr.Post("/api/viewshed", [this](const httplib::Request& req, httplib::Response& res) {
+            // Validate JSON quickly before starting a long computation
+            auto body = json::parse(req.body, nullptr, false);
+            if (body.is_discarded()) {
+                res.status = 400;
+                res.set_content(R"({"error":"invalid JSON"})", "application/json");
+                return;
+            }
+            for (const char* k : {"lat","lon","height_agl","range_km",
+                                   "az_min","az_max","el_min","el_max"}) {
+                if (!body.contains(k)) {
+                    res.status = 400;
+                    res.set_content(json{{"error", std::string("missing field: ") + k}}.dump(),
+                                    "application/json");
+                    return;
+                }
+            }
+
+            // Find compute_viewshed.py relative to the web_root
+            fs::path script = web_root.parent_path() / "scripts" / "compute_viewshed.py";
+            if (!fs::exists(script)) {
+                res.status = 500;
+                res.set_content(R"({"error":"compute_viewshed.py not found"})",
+                                "application/json");
+                return;
+            }
+
+            std::string result = runPython(script, req.body);
+            if (result.empty()) {
+                res.status = 500;
+                res.set_content(R"({"error":"viewshed computation failed"})",
+                                "application/json");
+                return;
+            }
+            res.set_header("Cache-Control", "no-store");
+            res.set_content(result, "application/json");
         });
 
         // Custom POST routes registered by the user via addRoute()

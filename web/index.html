@@ -88,6 +88,43 @@
 
       <div id="vab-feedback"></div>
 
+      <!-- レーダー覆域 -->
+      <section class="vab-section" id="radar-section">
+        <h3>Radar</h3>
+        <button class="vab-btn" id="r-place-btn" style="margin-bottom:4px">
+          地図クリックで位置設定
+        </button>
+        <label class="vab-row"><span>lat</span>
+          <input id="r-lat" type="number" step="0.001" value="35.690">
+        </label>
+        <label class="vab-row"><span>lon</span>
+          <input id="r-lon" type="number" step="0.001" value="139.692">
+        </label>
+        <label class="vab-row"><span>高度 AGL (m)</span>
+          <input id="r-hagl" type="number" step="1" value="10">
+        </label>
+        <label class="vab-row"><span>射程 (km)</span>
+          <input id="r-range" type="number" step="10" min="1" value="150">
+        </label>
+        <label class="vab-row"><span>Az 開始 (°)</span>
+          <input id="r-az-min" type="number" step="1" min="0" max="360" value="0">
+        </label>
+        <label class="vab-row"><span>Az 終了 (°)</span>
+          <input id="r-az-max" type="number" step="1" min="0" max="360" value="360">
+        </label>
+        <label class="vab-row"><span>El 最小 (°)</span>
+          <input id="r-el-min" type="number" step="0.5" value="0">
+        </label>
+        <label class="vab-row"><span>El 最大 (°)</span>
+          <input id="r-el-max" type="number" step="0.5" value="30">
+        </label>
+        <button class="vab-btn" id="r-add-btn">覆域を追加</button>
+        <button class="vab-btn vab-btn-danger" id="r-clear-btn" style="margin-top:4px">
+          全覆域を削除
+        </button>
+        <div id="radar-list"></div>
+      </section>
+
       <!-- 4×4 カスタムボタングリッド -->
       <section class="vab-section">
         <h3>Custom Buttons</h3>

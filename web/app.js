@@ -471,4 +471,230 @@ const DEFAULT_CONFIG = {
     grid.appendChild(btn);
   }
 
+  // ================================================================
+  // レーダー覆域 — 3D WebGL カスタムレイヤー
+  // ================================================================
+
+  // --- RadarCoverageLayer ----------------------------------------
+  // MapLibre の CustomLayerInterface を実装した 3D メッシュレイヤー
+  class RadarCoverageLayer {
+    constructor(id, meshData, color) {
+      this.id            = id;
+      this.type          = 'custom';
+      this.renderingMode = '3d';
+      this._mesh  = meshData;  // { vertices:[[lon,lat,alt],...], triangles:[[i,j,k],...] }
+      this._color = color;     // [r, g, b, a]  0-1 range
+    }
+
+    onAdd(map, gl) {
+      this._map = map;
+
+      const vs = `
+        attribute vec3 a_pos;
+        uniform mat4 u_matrix;
+        void main() { gl_Position = u_matrix * vec4(a_pos, 1.0); }`;
+      const fs = `
+        precision mediump float;
+        uniform vec4 u_color;
+        void main() { gl_FragColor = u_color; }`;
+
+      const compile = (type, src) => {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        return sh;
+      };
+      this._prog = gl.createProgram();
+      gl.attachShader(this._prog, compile(gl.VERTEX_SHADER,   vs));
+      gl.attachShader(this._prog, compile(gl.FRAGMENT_SHADER, fs));
+      gl.linkProgram(this._prog);
+
+      // Convert (lon, lat, alt) → Mercator (x, y, z) and pack into Float32Array
+      const verts = new Float32Array(this._mesh.vertices.length * 3);
+      this._mesh.vertices.forEach(([lon, lat, alt], i) => {
+        const mc = maplibregl.MercatorCoordinate.fromLngLat([lon, lat], alt);
+        verts[i * 3]     = mc.x;
+        verts[i * 3 + 1] = mc.y;
+        verts[i * 3 + 2] = mc.z;
+      });
+
+      this._vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+      // Index buffer — Uint32Array supports meshes with >65535 vertices
+      const idxArr = new Uint32Array(this._mesh.triangles.flat());
+      this._ibo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idxArr, gl.STATIC_DRAW);
+      this._nIdx = idxArr.length;
+
+      this._posLoc = gl.getAttribLocation(this._prog,  'a_pos');
+      this._matLoc = gl.getUniformLocation(this._prog, 'u_matrix');
+      this._colLoc = gl.getUniformLocation(this._prog, 'u_color');
+    }
+
+    render(gl, matrix) {
+      gl.useProgram(this._prog);
+      gl.uniformMatrix4fv(this._matLoc, false, matrix);
+      gl.uniform4fv(this._colLoc, this._color);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
+      gl.enableVertexAttribArray(this._posLoc);
+      gl.vertexAttribPointer(this._posLoc, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._ibo);
+
+      // 半透明描画: 深度バッファへの書き込みを止めてブレンディング
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+      gl.disable(gl.CULL_FACE);     // 裏面も描画（覆域内部からも見えるように）
+
+      gl.drawElements(gl.TRIANGLES, this._nIdx, gl.UNSIGNED_INT, 0);
+
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+      map.triggerRepaint();
+    }
+  }
+
+  // --- 覆域管理 ------------------------------------------------
+  // RADAR_COLORS: 複数レーダーを色で区別
+  const RADAR_COLORS = [
+    [0.0, 0.8, 1.0, 0.28],   // シアン
+    [1.0, 0.45, 0.0, 0.28],  // オレンジ
+    [0.4, 1.0, 0.2, 0.28],   // グリーン
+    [1.0, 0.2, 0.7, 0.28],   // ピンク
+    [1.0, 1.0, 0.0, 0.28],   // イエロー
+    [0.6, 0.2, 1.0, 0.28],   // パープル
+  ];
+
+  const radarLayers = new Map();   // layerId → { marker, colorIdx, params }
+  let radarSerial = 0;
+
+  function radarColorCss(colorArr) {
+    const [r, g, b] = colorArr.map(v => Math.round(v * 255));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  function updateRadarList() {
+    const list = document.getElementById('radar-list');
+    list.innerHTML = '';
+    for (const [lid, { colorIdx, params }] of radarLayers) {
+      const row  = document.createElement('div');
+      row.className = 'radar-list-row';
+      const swatch = document.createElement('span');
+      swatch.className = 'radar-swatch';
+      swatch.style.background = radarColorCss(RADAR_COLORS[colorIdx % RADAR_COLORS.length]);
+      const label  = document.createElement('span');
+      label.textContent = `R${radarLayers.size > 1 ? lid.split('-')[1] : ''}  `
+                        + `${params.range_km}km`;
+      const rmBtn  = document.createElement('button');
+      rmBtn.textContent = '✕';
+      rmBtn.className   = 'radar-rm-btn';
+      rmBtn.onclick     = () => removeRadar(lid);
+      row.append(swatch, label, rmBtn);
+      list.appendChild(row);
+    }
+  }
+
+  function removeRadar(lid) {
+    const entry = radarLayers.get(lid);
+    if (!entry) return;
+    if (map.getLayer(lid)) map.removeLayer(lid);
+    entry.marker.remove();
+    radarLayers.delete(lid);
+    updateRadarList();
+  }
+
+  function addRadar(params) {
+    const colorIdx = radarSerial % RADAR_COLORS.length;
+    const color    = RADAR_COLORS[colorIdx];
+    const lid      = `radar-${++radarSerial}`;
+
+    showFeedback('覆域計算中...（数十秒かかります）', true);
+
+    fetch('/api/viewshed', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(params),
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { showFeedback('Error: ' + data.error, false); return; }
+
+      const layer = new RadarCoverageLayer(lid, data, color);
+      // シンボル層より下に挿入（シンボルが隠れないように）
+      map.addLayer(layer);
+
+      // レーダー位置のマーカー
+      const el  = document.createElement('div');
+      el.className = 'radar-icon';
+      el.style.borderColor = radarColorCss(color);
+      el.title = `R${radarSerial}  ${params.range_km}km`;
+      const marker = new maplibregl.Marker({ element: el })
+        .setLngLat([params.lon, params.lat])
+        .setPopup(new maplibregl.Popup({ offset: 14 })
+          .setHTML(`<b>Radar R${radarSerial}</b><br>`
+                 + `高度 ${params.height_agl}m AGL<br>`
+                 + `射程 ${params.range_km}km<br>`
+                 + `Az ${params.az_min}°–${params.az_max}°<br>`
+                 + `El ${params.el_min}°–${params.el_max}°`))
+        .addTo(map);
+
+      radarLayers.set(lid, { marker, colorIdx, params });
+      updateRadarList();
+      const m = data.meta;
+      showFeedback(
+        `R${radarSerial} 追加 (${m.n_vertices}頂点 / ${m.n_triangles}三角形)`, true);
+    })
+    .catch(e => showFeedback('Error: ' + e, false));
+  }
+
+  // --- クリックで位置設定 ------------------------------------
+  let _placingRadar = false;
+
+  document.getElementById('r-place-btn').addEventListener('click', () => {
+    _placingRadar = true;
+    map.getCanvas().style.cursor = 'crosshair';
+    showFeedback('地図をクリックしてレーダー位置を指定', true);
+  });
+
+  map.on('click', (e) => {
+    if (!_placingRadar) return;
+    document.getElementById('r-lat').value = e.lngLat.lat.toFixed(5);
+    document.getElementById('r-lon').value = e.lngLat.lng.toFixed(5);
+    _placingRadar = false;
+    map.getCanvas().style.cursor = '';
+    showFeedback('位置を設定しました', true);
+  });
+
+  // --- 覆域追加ボタン ----------------------------------------
+  document.getElementById('r-add-btn').addEventListener('click', () => {
+    const params = {
+      lat:        parseFloat(document.getElementById('r-lat').value),
+      lon:        parseFloat(document.getElementById('r-lon').value),
+      height_agl: parseFloat(document.getElementById('r-hagl').value),
+      range_km:   parseFloat(document.getElementById('r-range').value),
+      az_min:     parseFloat(document.getElementById('r-az-min').value),
+      az_max:     parseFloat(document.getElementById('r-az-max').value),
+      el_min:     parseFloat(document.getElementById('r-el-min').value),
+      el_max:     parseFloat(document.getElementById('r-el-max').value),
+    };
+    if (isNaN(params.lat) || isNaN(params.lon)) {
+      showFeedback('lat / lon を入力してください', false);
+      return;
+    }
+    if (params.az_max <= params.az_min && (params.az_max - params.az_min) < 360) {
+      showFeedback('Az 終了 > Az 開始 にしてください', false);
+      return;
+    }
+    addRadar(params);
+  });
+
+  document.getElementById('r-clear-btn').addEventListener('click', () => {
+    for (const lid of [...radarLayers.keys()]) removeRadar(lid);
+  });
+
 })();
