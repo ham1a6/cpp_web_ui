@@ -75,6 +75,7 @@ const DEFAULT_CONFIG = {
     zoom:      cfg.zoom || 6,
     pitch:     45,
     bearing:   0,
+    maxPitch:  85,
     maxZoom:   cfg.max_zoom || 18,
     minZoom:   cfg.min_zoom || 5,
     attributionControl: false,
