@@ -26,7 +26,7 @@ PARAMS:
   el_max      float   Maximum elevation angle (degrees)
   az_step     float   Azimuth step (degrees, default 2.0)
   el_step     float   Elevation step (degrees, default 1.0)
-  ray_step_m  float   Range step for ray marching (m, default 1000.0)
+  ray_step_m  float   Range step for ray marching (m, default 500.0)
 """
 
 import json
@@ -145,20 +145,19 @@ def destination(lat0: float, lon0: float,
 
 def trace_ray(lat0: float, lon0: float, h0_asl: float,
               az_deg: float, el_deg: float,
-              max_r_m: float, step_m: float) -> tuple[float, float, float, bool]:
+              max_r_m: float, step_m: float) -> tuple[float, float, float, bool, float]:
     """
     Trace a radar ray from (lat0, lon0, h0_asl) in direction (az_deg, el_deg).
 
-    Returns (lat, lon, alt_asl, terrain_hit):
-      - endpoint on terrain surface if ray is blocked
-      - endpoint at max range otherwise
+    Returns (lat, lon, alt_asl, terrain_hit, range_m):
+      - endpoint on terrain surface and range_m = hit distance if blocked
+      - endpoint at max range and range_m = max_r_m otherwise
     """
     el        = math.radians(el_deg)
     sin_el    = math.sin(el)
     inv_2reff = 1.0 / (2.0 * R_EFF)
 
     r = step_m
-    prev_lat, prev_lon = lat0, lon0
 
     while r <= max_r_m:
         lat, lon   = destination(lat0, lon0, az_deg, r)
@@ -167,35 +166,31 @@ def trace_ray(lat0: float, lon0: float, h0_asl: float,
 
         if h_ray <= h_ter:
             # Linearly interpolate terrain hit between previous and current step
-            # for a smoother surface
             r_prev = r - step_m
             lat_p, lon_p = destination(lat0, lon0, az_deg, r_prev)
             h_ray_p = h0_asl + r_prev * sin_el - r_prev * r_prev * inv_2reff
             h_ter_p = get_elevation(lat_p, lon_p)
 
-            # Fraction along [r_prev, r] where h_ray == h_ter
             dh_ray = h_ray - h_ray_p
             dh_ter = h_ter - h_ter_p
             denom  = (dh_ray - dh_ter)
             if abs(denom) > 0.01:
-                t = (h_ter_p - h_ray_p) / denom
-                t = max(0.0, min(1.0, t))
+                t = max(0.0, min(1.0, (h_ter_p - h_ray_p) / denom))
                 r_hit = r_prev + t * step_m
                 lat_h, lon_h = destination(lat0, lon0, az_deg, r_hit)
                 alt_h = get_elevation(lat_h, lon_h)
             else:
-                lat_h, lon_h, alt_h = lat, lon, h_ter
+                lat_h, lon_h, alt_h, r_hit = lat, lon, h_ter, r
 
-            return lat_h, lon_h, alt_h, True
+            return lat_h, lon_h, alt_h, True, r_hit
 
-        prev_lat, prev_lon = lat, lon
         r += step_m
 
     # Reached max range without terrain hit
     lat, lon = destination(lat0, lon0, az_deg, max_r_m)
     h_ray    = h0_asl + max_r_m * sin_el - max_r_m * max_r_m * inv_2reff
     h_ter    = get_elevation(lat, lon)
-    return lat, lon, max(h_ray, h_ter), False
+    return lat, lon, max(h_ray, h_ter), False, max_r_m
 
 
 # ---------------------------------------------------------------------------
@@ -223,7 +218,7 @@ def compute(params: dict) -> dict:
     el_max   = float(params['el_max'])
     az_step  = float(params.get('az_step',  2.0))
     el_step  = float(params.get('el_step',  1.0))
-    ray_step = float(params.get('ray_step_m', 1000.0))
+    ray_step = float(params.get('ray_step_m', 500.0))
 
     h_asl0  = get_elevation(lat0, lon0) + h_agl
     max_r_m = range_km * 1000.0
@@ -242,18 +237,28 @@ def compute(params: dict) -> dict:
     print(f'  Rays: {n_az} az × {n_el} el = {total}', file=sys.stderr)
 
     # ---- Compute ray endpoints ----
-    # grid[az_idx][el_idx] = [lon, lat, alt_asl]
-    grid: list[list[list[float]]] = []
+    # grid[az_idx][el_idx]   = [lon, lat, alt_asl]
+    # ranges[az_idx][el_idx] = range in metres at which ray terminated
+    # hits[az_idx][el_idx]   = True if ray was blocked by terrain
+    grid:   list[list[list[float]]] = []
+    ranges: list[list[float]]       = []
+    hits:   list[list[bool]]        = []
     done = 0
 
     for az in azimuths:
-        row: list[list[float]] = []
+        row:  list[list[float]] = []
+        rrow: list[float]       = []
+        hrow: list[bool]        = []
         for el in elevations:
-            lat, lon, alt, _ = trace_ray(
+            lat, lon, alt, hit, rng = trace_ray(
                 lat0, lon0, h_asl0, az, el, max_r_m, ray_step)
             row.append([lon, lat, alt])
+            rrow.append(rng)
+            hrow.append(hit)
             done += 1
         grid.append(row)
+        ranges.append(rrow)
+        hits.append(hrow)
         pct = done * 100 // total
         sys.stderr.write(f'\r  Ray tracing... {pct:3d}%  ({done}/{total})')
         sys.stderr.flush()
@@ -280,10 +285,31 @@ def compute(params: dict) -> dict:
 
     az_range = range(n_az) if full_circle else range(n_az - 1)
 
-    # Outer boundary surface only (open shell)
+    # Outer boundary surface only (open shell).
+    # Skip quads that straddle a terrain-shadow boundary: these occur when some
+    # rays are blocked by terrain at short range while adjacent rays clear the
+    # terrain and reach much farther.  Keeping such quads makes the coverage
+    # appear to "wrap around" mountains and include their shadowed far sides.
+    # A quad is skipped when it mixes terrain-hit and non-terrain-hit vertices
+    # AND the ratio of max-range to min-range exceeds SHADOW_RATIO.
+    SHADOW_RATIO = 1.5
+
     for i in az_range:
         ni = col_next(i)
         for j in range(n_el - 1):
+            h00 = hits[i][j];   h10 = hits[ni][j]
+            h01 = hits[i][j+1]; h11 = hits[ni][j+1]
+            any_hit = h00 or h10 or h01 or h11
+            all_hit = h00 and h10 and h01 and h11
+
+            if any_hit and not all_hit:
+                r00 = ranges[i][j];   r10 = ranges[ni][j]
+                r01 = ranges[i][j+1]; r11 = ranges[ni][j+1]
+                rmin = min(r00, r10, r01, r11)
+                rmax = max(r00, r10, r01, r11)
+                if rmin > 0 and rmax > SHADOW_RATIO * rmin:
+                    continue  # terrain shadow boundary — leave hole in mesh
+
             a, b = idx[i][j],   idx[ni][j]
             c, d = idx[i][j+1], idx[ni][j+1]
             triangles += [[a, b, d], [a, d, c]]
