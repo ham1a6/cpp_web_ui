@@ -3,6 +3,7 @@
 #include "json.hpp"
 #include "shared_types.h"
 #include <cpp_web_ui/MapServer.hpp>
+#include <cpp_web_ui/ViewshedComputer.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -67,40 +68,6 @@ static std::string makeETag(const fs::path& p) {
     return buf;
 }
 
-// Run a Python script with JSON on stdin; return stdout as string.
-// Returns empty string on failure.  Script path must be absolute.
-static std::string runPython(const fs::path& script, const std::string& stdin_json) {
-    // Write stdin to a unique temp file
-    char tmp_in[]  = "/tmp/cwu_vs_in_XXXXXX";
-    char tmp_out[] = "/tmp/cwu_vs_out_XXXXXX";
-
-    int fd_in = mkstemp(tmp_in);
-    if (fd_in < 0) return "";
-    {
-        const char* p = stdin_json.c_str();
-        ssize_t rem   = (ssize_t)stdin_json.size();
-        while (rem > 0) { ssize_t n = ::write(fd_in, p, rem); if (n <= 0) break; p += n; rem -= n; }
-    }
-    ::close(fd_in);
-
-    int fd_out = mkstemp(tmp_out);
-    if (fd_out < 0) { ::unlink(tmp_in); return ""; }
-    ::close(fd_out);
-
-    // python3 script.py < tmp_in > tmp_out 2>/dev/null
-    std::string cmd = "python3 " + script.string()
-                    + " < " + tmp_in
-                    + " > " + tmp_out
-                    + " 2>/dev/null";
-    int rc = std::system(cmd.c_str());
-
-    std::string result;
-    if (rc == 0) result = readFile(tmp_out);
-
-    ::unlink(tmp_in);
-    ::unlink(tmp_out);
-    return result;
-}
 
 static void serveFile(const httplib::Request& req, httplib::Response& res,
                       const fs::path& file, bool isTile) {
@@ -223,6 +190,9 @@ struct MapServer::Impl {
 
     // Custom POST routes registered via MapServer::addRoute() before start()
     std::vector<std::pair<std::string, MapServer::PostHandler>> custom_routes;
+
+    // Viewshed computation engine (initialized in MapServer constructor)
+    std::unique_ptr<ViewshedComputer> vshed_computer;
 
     // Overlay tile proxy: when overlay_url is an external http/https URL,
     // the server fetches tiles on behalf of the browser so the browser
@@ -348,11 +318,11 @@ struct MapServer::Impl {
 
         // Viewshed / 3-D radar coverage computation
         // POST body: { lat, lon, height_agl, range_km, az_min, az_max,
-        //              el_min, el_max [, az_step, el_step, ray_step_m] }
-        // Response:  { vertices:[[lon,lat,alt],...], triangles:[[i,j,k],...], meta:{...} }
+        //              el_min, el_max [, az_step, el_step, ray_step_m,
+        //              section_only, az_deg] }
+        // Response:  { vertices, triangles, meta, section }  or  { section }
         //            or { error: "..." }
         svr.Post("/api/viewshed", [this](const httplib::Request& req, httplib::Response& res) {
-            // Validate JSON quickly before starting a long computation
             auto body = json::parse(req.body, nullptr, false);
             if (body.is_discarded()) {
                 res.status = 400;
@@ -363,22 +333,20 @@ struct MapServer::Impl {
                                    "az_min","az_max","el_min","el_max"}) {
                 if (!body.contains(k)) {
                     res.status = 400;
-                    res.set_content(json{{"error", std::string("missing field: ") + k}}.dump(),
-                                    "application/json");
+                    res.set_content(
+                        json{{"error", std::string("missing field: ") + k}}.dump(),
+                        "application/json");
                     return;
                 }
             }
-
-            // Find compute_viewshed.py relative to the web_root
-            fs::path script = web_root.parent_path() / "scripts" / "compute_viewshed.py";
-            if (!fs::exists(script)) {
-                res.status = 500;
-                res.set_content(R"({"error":"compute_viewshed.py not found"})",
-                                "application/json");
+            if (!vshed_computer) {
+                res.status = 503;
+                res.set_content(
+                    R"({"error":"terrain-rgb tiles not found; run generate_terrain_rgb.py first"})",
+                    "application/json");
                 return;
             }
-
-            std::string result = runPython(script, req.body);
+            std::string result = vshed_computer->run(req.body);
             if (result.empty()) {
                 res.status = 500;
                 res.set_content(R"({"error":"viewshed computation failed"})",
@@ -607,6 +575,21 @@ MapServer::MapServer(MapConfig config) : impl_(std::make_unique<Impl>()) {
         std::fprintf(stderr,
             "cpp_web_ui: tiles detected max_native_zoom=%d  max_zoom=%d\n",
             impl_->config.max_native_zoom, impl_->config.max_zoom);
+    }
+
+    // Initialize viewshed computation engine if terrain-rgb tiles are present.
+    if (!impl_->web_root.empty()) {
+        fs::path terrain_dir = impl_->web_root / "terrain-rgb";
+        if (fs::is_directory(terrain_dir)) {
+            impl_->vshed_computer =
+                std::make_unique<ViewshedComputer>(terrain_dir.string());
+            std::fprintf(stderr, "cpp_web_ui: viewshed engine ready (%s)\n",
+                         terrain_dir.c_str());
+        } else {
+            std::fprintf(stderr,
+                "cpp_web_ui: terrain-rgb not found — viewshed disabled "
+                "(run scripts/generate_terrain_rgb.py)\n");
+        }
     }
 
     // If overlay_url is an external URL (http/https), set up a server-side proxy

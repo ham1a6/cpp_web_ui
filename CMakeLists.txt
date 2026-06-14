@@ -11,6 +11,7 @@ find_package(OpenSSL)
 add_library(cpp_web_ui STATIC
     src/MapServer.cpp
     src/ShmPublisher.cpp
+    src/ViewshedComputer.cpp
 )
 add_library(cpp_web_ui::cpp_web_ui ALIAS cpp_web_ui)
 
