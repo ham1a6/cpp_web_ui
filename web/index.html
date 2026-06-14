@@ -19,6 +19,16 @@
           <li><button id="menu-toggle-vab">VAB を隠す</button></li>
           <li><button id="menu-toggle-status">Status を隠す</button></li>
           <li><button id="menu-toggle-terrain">3D地形 を無効化</button></li>
+          <li><button id="menu-toggle-hillshade">地形陰影 を隠す</button></li>
+          <li><button id="menu-toggle-gsi">GSI地図 を隠す</button></li>
+          <li>
+            <label class="menu-slider-row">
+              <span>陰影強度</span>
+              <input id="hillshade-intensity" type="range"
+                     min="0" max="1" step="0.05" value="0.45">
+              <span id="hillshade-intensity-val">45%</span>
+            </label>
+          </li>
           <li><button id="menu-reset-north">北向き・水平にリセット</button></li>
         </ul>
       </li>
@@ -122,6 +132,9 @@
         <button class="vab-btn vab-btn-danger" id="r-clear-btn" style="margin-top:4px">
           全覆域を削除
         </button>
+        <button class="vab-btn" id="r-section-btn" style="margin-top:2px">
+          断面図を表示
+        </button>
         <div id="radar-list"></div>
       </section>
 
@@ -161,6 +174,36 @@
     </div>
 
   </div><!-- #main -->
+
+  <!-- 断面図フローティングウィンドウ -->
+  <div id="section-float" style="display:none">
+    <!-- 8方向リサイズハンドル -->
+    <div class="sf-rz" data-dir="n"></div>
+    <div class="sf-rz" data-dir="ne"></div>
+    <div class="sf-rz" data-dir="e"></div>
+    <div class="sf-rz" data-dir="se"></div>
+    <div class="sf-rz" data-dir="s"></div>
+    <div class="sf-rz" data-dir="sw"></div>
+    <div class="sf-rz" data-dir="w"></div>
+    <div class="sf-rz" data-dir="nw"></div>
+    <div id="section-float-hdr">
+      <span>断面図</span>
+      <button id="sf-close-btn" title="閉じる">✕</button>
+    </div>
+    <div id="section-float-body">
+      <div class="sf-row">
+        <label class="sf-label">レーダー</label>
+        <select id="sf-radar-sel"></select>
+      </div>
+      <div class="sf-row">
+        <label class="sf-label">方位角 (°)</label>
+        <input id="sf-az" type="number" min="0" max="360" step="1" value="0">
+        <button id="sf-update-btn">更新</button>
+      </div>
+      <canvas id="sf-canvas"></canvas>
+      <div id="sf-status"></div>
+    </div>
+  </div>
 
   <script src="lib/maplibre-gl.js"></script>
   <script src="app.js"></script>

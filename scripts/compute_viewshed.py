@@ -194,6 +194,72 @@ def trace_ray(lat0: float, lon0: float, h0_asl: float,
 
 
 # ---------------------------------------------------------------------------
+# Vertical cross-section
+# ---------------------------------------------------------------------------
+
+def compute_section(lat0: float, lon0: float, h_asl0: float,
+                    az_deg: float, el_max_deg: float,
+                    range_km: float, ray_step_m: float) -> dict:
+    """
+    Compute a vertical cross-section along az_deg.
+
+    Uses a horizon-angle scan to determine shadow zones.
+    At each range step:
+      - terrain_m : terrain elevation (m ASL)
+      - min_vis_m : lowest altitude visible from radar at this range
+                    (= terrain if directly visible; horizon-line altitude if shadowed)
+      - max_cov_m : altitude of the el_max beam (upper coverage boundary)
+    """
+    el_max_rad = math.radians(el_max_deg)
+    max_r_m    = range_km * 1000.0
+    inv_2reff  = 1.0 / (2.0 * R_EFF)
+
+    range_list:   list[float] = []
+    terrain_list: list[float] = []
+    min_vis_list: list[float] = []
+    max_cov_list: list[float] = []
+
+    max_el_hor = float('-inf')   # highest terrain elevation angle seen so far
+    r = ray_step_m
+    while True:
+        r = min(r, max_r_m)
+        lat, lon = destination(lat0, lon0, az_deg, r)
+        ter = get_elevation(lat, lon)
+
+        # Elevation angle from radar to terrain at r (with Earth-curvature correction)
+        el_ter = math.atan2(ter - h_asl0 + r * r * inv_2reff, r)
+
+        if el_ter > max_el_hor:
+            # Terrain is directly visible — update the horizon
+            min_vis = ter
+            max_el_hor = el_ter
+        else:
+            # Shadow zone — lowest visible altitude is on the horizon line
+            h_hor   = h_asl0 + r * math.sin(max_el_hor) - r * r * inv_2reff
+            min_vis = max(ter, h_hor)
+
+        max_cov = h_asl0 + r * math.sin(el_max_rad) - r * r * inv_2reff
+
+        range_list.append(round(r / 1000.0, 3))
+        terrain_list.append(round(ter, 1))
+        min_vis_list.append(round(min_vis, 1))
+        max_cov_list.append(round(max_cov, 1))
+
+        if r >= max_r_m:
+            break
+        r += ray_step_m
+
+    return {
+        'az_deg':      round(az_deg, 1),
+        'radar_alt_m': round(h_asl0, 1),
+        'range_km':    range_list,
+        'terrain_m':   terrain_list,
+        'min_vis_m':   min_vis_list,
+        'max_cov_m':   max_cov_list,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Mesh builder
 # ---------------------------------------------------------------------------
 
@@ -314,6 +380,10 @@ def compute(params: dict) -> dict:
             c, d = idx[i][j+1], idx[ni][j+1]
             triangles += [[a, b, d], [a, d, c]]
 
+    # Vertical cross-section at center azimuth
+    sec_az = 0.0 if full_circle else (az_min + az_max) / 2.0
+    section = compute_section(lat0, lon0, h_asl0, sec_az, el_max, range_km, ray_step)
+
     return {
         'vertices':  vertices,
         'triangles': triangles,
@@ -321,9 +391,12 @@ def compute(params: dict) -> dict:
             'lat': lat0, 'lon': lon0,
             'alt_asl': h_asl0,
             'range_km': range_km,
+            'n_az': n_az, 'n_el': n_el,
+            'full_circle': full_circle,
             'n_vertices':  len(vertices),
             'n_triangles': len(triangles),
-        }
+        },
+        'section': section,
     }
 
 
@@ -333,6 +406,20 @@ def compute(params: dict) -> dict:
 
 if __name__ == '__main__':
     params = json.load(sys.stdin)
-    result = compute(params)
-    json.dump(result, sys.stdout, separators=(',', ':'))
+
+    if params.get('section_only'):
+        # Lightweight path: compute only the vertical cross-section, no mesh.
+        lat0     = float(params['lat'])
+        lon0     = float(params['lon'])
+        h_asl0   = get_elevation(lat0, lon0) + float(params['height_agl'])
+        az_deg   = float(params.get('az_deg', 0.0))
+        el_max   = float(params['el_max'])
+        range_km = float(params['range_km'])
+        ray_step = float(params.get('ray_step_m', 500.0))
+        section  = compute_section(lat0, lon0, h_asl0, az_deg, el_max, range_km, ray_step)
+        json.dump({'section': section}, sys.stdout, separators=(',', ':'))
+    else:
+        result = compute(params)
+        json.dump(result, sys.stdout, separators=(',', ':'))
+
     print(file=sys.stderr)  # final newline on stderr
