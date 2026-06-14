@@ -27,3 +27,7 @@ __pycache__/
 Thumbs.db
 *.swp
 *~
+
+# C# build artifacts
+csharp/*/obj/
+csharp/*/bin/
