@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>MapServer</AssemblyName>
+    <RootNamespace>MapServer</RootNamespace>
+    <!-- ViewshedComputer needs unsafe for fixed-size arrays in MemoryMarshal -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Cross-platform PNG decoder for terrain-rgb tiles (Terrarium encoding) -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.*" />
+  </ItemGroup>
+
+</Project>

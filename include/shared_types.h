@@ -17,3 +17,5 @@ struct SharedMapData {
     uint32_t count;
     Symbol   symbols[MAX_SYMBOLS];
 };
+// sizeof(Symbol)        == 72   (8+8+32+16+4 + 4 padding for double alignment)
+// sizeof(SharedMapData) == 4616 (8 header + 64*72)
