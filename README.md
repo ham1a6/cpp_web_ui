@@ -142,7 +142,15 @@ cmake --build build -j$(nproc)
 
 ### Docker ビルド
 
-タイルデータ (`web/tiles/`、`web/terrain-rgb/`) が事前に生成されている状態で、Rocky Linux 9 ベースのコンテナイメージをビルドします。
+Dockerfile はマルチステージ構成です:
+
+| ステージ | ベースイメージ | 用途 |
+|---|---|---|
+| `builder` | Rocky Linux 9 | C++ コンパイル |
+| `runtime` | Rocky Linux 9 | サーバー実行（タイル込み） |
+| `tile-builder` | Debian 12-slim | タイル生成（GDAL + Python） |
+
+タイルデータ (`web/tiles/`、`web/terrain-rgb/`) が事前に生成されている状態でランタイムイメージをビルドします。
 
 ```bash
 # ランタイムイメージのビルド (web/tiles/ と web/terrain-rgb/ が必要)
@@ -163,7 +171,7 @@ docker run -p 9000:9000 \
 タイルをコンテナ内で再生成する場合（`map/` が必要）:
 
 ```bash
-# タイル生成イメージのビルド (GDAL + Python 入り)
+# タイル生成イメージのビルド (Debian 12-slim ベース、GDAL + Python + ca-certificates 入り)
 docker build --target tile-builder -t cpp_web_ui:tile-builder .
 
 # 生成計画の確認 (実行なし)
@@ -172,14 +180,21 @@ docker run --rm \
     -v $(pwd)/web:/app/web \
     cpp_web_ui:tile-builder scripts/generate_all_tiles.sh --dry-run
 
-# タイル生成実行
+# デフォルト実行: color-relief zoom 11 + terrain-rgb zoom 5-12 + GSI overlay zoom 5-10
 docker run --rm \
     -v $(pwd)/map:/app/map:ro \
     -v $(pwd)/web:/app/web \
     cpp_web_ui:tile-builder
+
+# zoom 12 カラーレリーフも生成 (--full)
+docker run --rm \
+    -v $(pwd)/map:/app/map:ro \
+    -v $(pwd)/web:/app/web \
+    cpp_web_ui:tile-builder scripts/generate_all_tiles.sh --full
 ```
 
-`map/`（19 GB の GeoTIFF データ）はランタイムイメージには含まれず、タイル生成時のみボリュームマウントで参照します。
+`map/`（19 GB の GeoTIFF データ）はランタイムイメージには含まれず、タイル生成時のみボリュームマウントで参照します。  
+`ca-certificates` が含まれているため、GSI overlay タイルの HTTPS ダウンロードも追加設定なしで動作します。
 
 ### インストール
 
@@ -540,6 +555,10 @@ map/
 元データは JAXA 地球観測研究センターから取得: https://www.eorc.jaxa.jp/ALOS/en/alos-3/a3_dataset.htm
 
 ### タイル生成
+
+**Docker を使う場合（推奨）**: 依存パッケージのインストール不要。詳細は [Docker ビルド](#docker-ビルド) を参照してください。
+
+ホスト環境で直接実行する場合は、以下のパッケージが必要です。
 
 ```bash
 # 必要パッケージ (Debian/Ubuntu)
