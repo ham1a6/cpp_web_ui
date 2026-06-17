@@ -1,0 +1,29 @@
+# JAXA GeoTIFF source data (19 GB) — not needed in runtime image.
+# For tile regeneration, mount map/ as a volume with the tile-builder target.
+map/
+
+# Build artifacts
+build/
+
+# Git / IDE / CI
+.git/
+.github/
+.devcontainer/
+.claude/
+
+# Python cache
+**/__pycache__/
+**/*.py[cod]
+
+# Logs / temp
+*.log
+*.lock
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Dev-only docs
+SPEC.md

@@ -140,6 +140,47 @@ cmake --build build -j$(nproc)
 | `build/simple_usage` | in-process API デモ (`-DCPP_WEB_UI_BUILD_EXAMPLES=ON` 時) |
 | `build/shm_writer` | ShmPublisher デモ (`-DCPP_WEB_UI_BUILD_EXAMPLES=ON` 時) |
 
+### Docker ビルド
+
+タイルデータ (`web/tiles/`、`web/terrain-rgb/`) が事前に生成されている状態で、Rocky Linux 9 ベースのコンテナイメージをビルドします。
+
+```bash
+# ランタイムイメージのビルド (web/tiles/ と web/terrain-rgb/ が必要)
+docker build --target runtime -t cpp_web_ui .
+
+# サーバー起動 (ポート 9000)
+docker run -p 9000:9000 cpp_web_ui
+
+# ポートを変更する場合
+docker run -p 8080:8080 -e PORT=8080 cpp_web_ui
+
+# オーバーレイタイルキャッシュをホストに永続化する場合
+docker run -p 9000:9000 \
+    -v $(pwd)/web/overlay-tiles:/app/web/overlay-tiles \
+    cpp_web_ui
+```
+
+タイルをコンテナ内で再生成する場合（`map/` が必要）:
+
+```bash
+# タイル生成イメージのビルド (GDAL + Python 入り)
+docker build --target tile-builder -t cpp_web_ui:tile-builder .
+
+# 生成計画の確認 (実行なし)
+docker run --rm \
+    -v $(pwd)/map:/app/map:ro \
+    -v $(pwd)/web:/app/web \
+    cpp_web_ui:tile-builder scripts/generate_all_tiles.sh --dry-run
+
+# タイル生成実行
+docker run --rm \
+    -v $(pwd)/map:/app/map:ro \
+    -v $(pwd)/web:/app/web \
+    cpp_web_ui:tile-builder
+```
+
+`map/`（19 GB の GeoTIFF データ）はランタイムイメージには含まれず、タイル生成時のみボリュームマウントで参照します。
+
 ### インストール
 
 ```bash
@@ -854,5 +895,7 @@ cpp_web_ui/
 ├── cmake/
 │   └── cpp_web_ui-config.cmake.in
 ├── CMakeLists.txt
+├── Dockerfile                      ← マルチステージビルド (builder / runtime / tile-builder)
+├── .dockerignore                   ← map/ (19GB) と build/ を除外
 └── SPEC.md                         ← 機能仕様書
 ```
