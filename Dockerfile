@@ -115,6 +115,7 @@ FROM debian:12-slim AS tile-builder
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
+        ca-certificates \
         gdal-bin python3-gdal python3-numpy && \
     rm -rf /var/lib/apt/lists/*
 
