@@ -187,6 +187,7 @@ struct MapServer::Impl {
     SseBroker       sse;
     httplib::Server svr;
     fs::path        web_root;
+    fs::path        overlay_dir;   // data/overlay-tiles/ — separate from web assets
 
     // Custom POST routes registered via MapServer::addRoute() before start()
     std::vector<std::pair<std::string, MapServer::PostHandler>> custom_routes;
@@ -367,7 +368,7 @@ struct MapServer::Impl {
 
         // Overlay tile proxy — fetches external tiles server-side so the browser
         // only needs localhost access regardless of network restrictions.
-        // Tiles are persisted to web_root/overlay-tiles/ for offline reuse.
+        // Tiles are persisted to data/overlay-tiles/ for offline reuse.
         if (overlay_upstream.valid) {
             svr.Get(R"(/overlay-tiles/(\d+)/(\d+)/(\d+))",
                     [this](const httplib::Request& req, httplib::Response& res) {
@@ -379,9 +380,9 @@ struct MapServer::Impl {
                     overlay_upstream.path_tpl, z, x, y);
 
                 // 1. Check local disk (pre-downloaded or previously cached)
-                if (!web_root.empty()) {
+                if (!overlay_dir.empty()) {
                     for (const auto* ext : {".png", ".jpg"}) {
-                        auto f = web_root / "overlay-tiles" / z / x / (y + ext);
+                        auto f = overlay_dir / z / x / (y + ext);
                         if (fs::exists(f)) {
                             serveFile(req, res, f, /*isTile=*/true);
                             return;
@@ -441,10 +442,10 @@ struct MapServer::Impl {
                 if (!ok) { res.status = 404; return; }
 
                 // 4. Persist to disk for offline use on next server restart
-                if (!web_root.empty()) {
+                if (!overlay_dir.empty()) {
                     const std::string ext =
                         (content_type.find("jpeg") != std::string::npos) ? ".jpg" : ".png";
-                    auto dir = web_root / "overlay-tiles" / z / x;
+                    auto dir = overlay_dir / z / x;
                     std::error_code ec;
                     fs::create_directories(dir, ec);
                     if (!ec) {
@@ -558,6 +559,14 @@ MapServer::MapServer(MapConfig config) : impl_(std::make_unique<Impl>()) {
         else
             std::fprintf(stderr, "cpp_web_ui: web_root = %s\n",
                          impl_->web_root.c_str());
+    }
+
+    // Derive overlay cache directory from the project root (web_root's parent).
+    // Layout: <project>/data/overlay-tiles/  (separate from web-served assets)
+    if (!impl_->web_root.empty()) {
+        impl_->overlay_dir = impl_->web_root.parent_path() / "data" / "overlay-tiles";
+        std::fprintf(stderr, "cpp_web_ui: overlay_dir = %s\n",
+                     impl_->overlay_dir.c_str());
     }
 
     // Auto-detect max_native_zoom / max_zoom from the tiles directory so

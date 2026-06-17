@@ -38,7 +38,7 @@ from pathlib import Path
 
 SCRIPT_DIR  = Path(__file__).resolve().parent
 PROJECT_DIR = SCRIPT_DIR.parent
-MAP_DIR     = PROJECT_DIR / 'map'
+MAP_DIR     = PROJECT_DIR / 'data' / 'map'
 TILES_DIR   = PROJECT_DIR / 'web' / 'tiles'
 COLOR_TABLE = SCRIPT_DIR / 'color_table.txt'
 NCPU        = os.cpu_count() or 4

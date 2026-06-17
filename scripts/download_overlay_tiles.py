@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Download GSI pale-map overlay tiles for offline use.
-Tiles are saved to web/overlay-tiles/{z}/{x}/{y}.png
+Tiles are saved to data/overlay-tiles/{z}/{x}/{y}.png
 
 Typical workflow
 ----------------
@@ -22,7 +22,7 @@ GSI tile policy: https://maps.gsi.go.jp/development/ichiran.html
 import os, sys, math, time, urllib.request, argparse
 
 TILE_URL = "https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png"
-OUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'web', 'overlay-tiles')
+OUT_DIR  = os.path.join(os.path.dirname(__file__), '..', 'data', 'overlay-tiles')
 
 HEADERS = {
     'User-Agent': 'MapDemoApp/1.0 (offline educational demo; contact yhamae@outlook.com)'

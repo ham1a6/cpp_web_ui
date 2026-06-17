@@ -1,6 +1,6 @@
 # JAXA GeoTIFF source data (19 GB) — not needed in runtime image.
-# For tile regeneration, mount map/ as a volume with the tile-builder target.
-map/
+# For tile regeneration, mount data/map/ as a volume with the tile-builder target.
+data/map/
 
 # Build artifacts
 build/

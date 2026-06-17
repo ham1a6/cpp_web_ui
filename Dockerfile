@@ -16,7 +16,7 @@
 #
 #  # Persist overlay tile cache between restarts
 #  docker run -p 9000:9000 \
-#      -v $(pwd)/web/overlay-tiles:/app/web/overlay-tiles \
+#      -v $(pwd)/data/overlay-tiles:/app/data/overlay-tiles \
 #      cpp_web_ui
 #
 # ── Tile regeneration ────────────────────────────────────────────────────────
@@ -25,14 +25,16 @@
 #
 #  # Dry-run (plan only, no files written)
 #  docker run --rm \
-#      -v $(pwd)/map:/app/map:ro \
+#      -v $(pwd)/data/map:/app/data/map:ro \
 #      -v $(pwd)/web:/app/web \
+#      -v $(pwd)/data/overlay-tiles:/app/data/overlay-tiles \
 #      cpp_web_ui:tile-builder scripts/generate_all_tiles.sh --dry-run
 #
 #  # Generate all tiles (color-relief zoom 11, terrain-rgb zoom 5-12, overlay zoom 5-10)
 #  docker run --rm \
-#      -v $(pwd)/map:/app/map:ro \
+#      -v $(pwd)/data/map:/app/data/map:ro \
 #      -v $(pwd)/web:/app/web \
+#      -v $(pwd)/data/overlay-tiles:/app/data/overlay-tiles \
 #      cpp_web_ui:tile-builder
 #
 ###############################################################################
@@ -49,7 +51,7 @@ RUN dnf groupinstall -y "Development Tools" && \
 WORKDIR /build
 
 # Copy only source files needed for compilation.
-# web/ and map/ are intentionally excluded here to keep this stage small.
+# web/ and data/ are intentionally excluded here to keep this stage small.
 COPY CMakeLists.txt ./
 COPY cmake/         cmake/
 COPY include/       include/
@@ -78,15 +80,16 @@ COPY --from=builder /build/out/simple_usage ./
 # Tiles are large (web/tiles ≈ 2.6 GB, web/terrain-rgb ≈ 3.0 GB) but rarely
 # rebuild after generation, so Docker layer cache keeps rebuilds fast when
 # only app.js / index.html change.
-COPY web/lib/        web/lib/
-COPY web/index.html  web/index.html
-COPY web/app.js      web/app.js
-COPY web/style.css   web/style.css
-COPY web/tiles/      web/tiles/
+COPY web/lib/         web/lib/
+COPY web/index.html   web/index.html
+COPY web/app.js       web/app.js
+COPY web/style.css    web/style.css
+COPY web/tiles/       web/tiles/
 COPY web/terrain-rgb/ web/terrain-rgb/
-# overlay-tiles are sparse/empty at build time; the server caches fetched tiles
-# here automatically. Mount as a named volume to persist across container restarts.
-COPY web/overlay-tiles/ web/overlay-tiles/
+
+# Overlay tile cache lives in data/overlay-tiles/ (separate from web assets).
+# Mount as a named volume to persist across container restarts.
+COPY data/overlay-tiles/ data/overlay-tiles/
 
 # web_root is auto-detected from /proc/self/exe (looks for ./web relative to
 # the binary directory), so no env var is required. Setting it explicitly here
@@ -104,8 +107,8 @@ CMD exec /app/simple_usage "${PORT}"
 # Stage 3 — Tile generation (optional; not part of runtime image)
 #
 # Use this stage to regenerate tiles from JAXA AW3D30 GeoTIFF data.
-# The map/ directory (≈ 19 GB) must be available on the host and is mounted
-# as a read-only volume at runtime — it is never baked into the image.
+# The data/map/ directory (≈ 19 GB) must be available on the host and is
+# mounted as a read-only volume at runtime — it is never baked into the image.
 ###############################################################################
 # Debian is used here because GDAL is available directly in the official
 # repositories (no EPEL equivalent needed). Switch to rockylinux:9 with
@@ -123,9 +126,10 @@ WORKDIR /app
 
 COPY scripts/ scripts/
 
-# /app/map  — mount JAXA GeoTIFF source data here (read-only)
-# /app/web  — mount web/ output directory here (read-write for tile output)
-VOLUME ["/app/map", "/app/web"]
+# /app/data/map          — mount JAXA GeoTIFF source data here (read-only)
+# /app/web               — mount web/ output directory here (tiles + terrain-rgb)
+# /app/data/overlay-tiles — mount overlay tile cache here (read-write)
+VOLUME ["/app/data/map", "/app/web", "/app/data/overlay-tiles"]
 
 # Default: generate all tiles (color-relief zoom 11, terrain-rgb, overlay).
 # Pass arguments to override, e.g.:

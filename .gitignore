@@ -1,15 +1,15 @@
 # ビルド成果物
 build/
 
-# 生成データ（ローカルで再生成）
-# web/tiles/         ← generate_tiles.py または download_tiles.py で生成 (~7 GB)
+# ダウンロード / 生成データ（ローカルで用意・再生成するもの）
+# data/map/           ← JAXA AW3D30 生データ（手動でダウンロード、約 19 GB）
+data/map/
+# data/overlay-tiles/ ← download_overlay_tiles.py またはサーバー自動キャッシュで生成
+data/overlay-tiles/
+# web/tiles/          ← generate_tiles.py で生成（約 7 GB）
 web/tiles/
-# web/overlay-tiles/ ← download_overlay_tiles.py またはサーバー自動キャッシュで生成
-web/overlay-tiles/
-# web/terrain-rgb/   ← generate_terrain_rgb.py で生成 (MapLibre 3D地形用)
+# web/terrain-rgb/    ← generate_terrain_rgb.py で生成（MapLibre 3D 地形用）
 web/terrain-rgb/
-# map/               ← JAXA AW3D30 生データ（手動でダウンロード）
-map/
 
 # Python キャッシュ
 __pycache__/

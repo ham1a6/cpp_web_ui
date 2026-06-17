@@ -3,7 +3,7 @@
 # Batch-generate all tile sets for cpp_web_ui:
 #   1. generate_tiles.py        — JAXA AW3D30 color-relief tiles (web/tiles/)
 #   2. generate_terrain_rgb.py  — Terrarium elevation tiles (web/terrain-rgb/)
-#   3. download_overlay_tiles.py — GSI overlay tiles (web/overlay-tiles/, needs internet)
+#   3. download_overlay_tiles.py — GSI overlay tiles (data/overlay-tiles/, needs internet)
 #
 # Usage:
 #   scripts/generate_all_tiles.sh                  # zoom 11 tiles + terrain-rgb + overlay
@@ -72,7 +72,7 @@ step "Terrain-RGB elevation tiles (web/terrain-rgb/)"
 "$PYTHON3" scripts/generate_terrain_rgb.py "${DRY_FLAG[@]}"
 
 if [[ $SKIP_OVERLAY -eq 0 ]]; then
-    step "GSI overlay tiles (web/overlay-tiles/)"
+    step "GSI overlay tiles (data/overlay-tiles/)"
     overlay_args=(--zoom "$OVERLAY_ZOOM")
     [[ -n "$OVERLAY_BBOX" ]] && overlay_args+=(--bbox "$OVERLAY_BBOX")
     "$PYTHON3" scripts/download_overlay_tiles.py "${overlay_args[@]}" "${DRY_FLAG[@]}"

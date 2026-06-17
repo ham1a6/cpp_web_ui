@@ -193,7 +193,7 @@ if (!ou.empty() && ou.rfind("http", 0) == 0) {
 ```
 ブラウザ → GET /overlay-tiles/{z}/{x}/{y}
   ↓
-  1. web/overlay-tiles/{z}/{x}/{y}.png  ← ディスクキャッシュ (最優先)
+  1. data/overlay-tiles/{z}/{x}/{y}.png  ← ディスクキャッシュ (最優先)
      ヒット → Cache-Control: public, max-age=300 でレスポンス
   ↓ ミス
   2. overlay_tile_cache[path]            ← メモリキャッシュ (最大 2000 枚)
