@@ -16,7 +16,8 @@ JAXA AW3D30 resolution vs zoom level (at 35°N):
   zoom 13:  ~16 m/px  (oversampled — beyond sensor resolution)
 
 Requirements:
-  apt install gdal-bin python3-gdal python3-numpy
+  Debian/Ubuntu : apt install gdal-bin python3-gdal python3-numpy
+  Rocky Linux   : dnf install gdal gdal-python3 python3-numpy
 
 Usage:
   python3 scripts/generate_tiles.py            # zoom 11-12 (default)

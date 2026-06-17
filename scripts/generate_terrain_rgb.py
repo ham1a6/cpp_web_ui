@@ -16,7 +16,8 @@ mixes R and G channel bytes and corrupts the encoded elevation at overview
 zoom levels.  Near-neighbor preserves encoding fidelity.
 
 Requirements:
-  apt install gdal-bin python3-gdal python3-numpy
+  Debian/Ubuntu : apt install gdal-bin python3-gdal python3-numpy
+  Rocky Linux   : dnf install gdal gdal-python3 python3-numpy
 
 Usage:
   python3 scripts/generate_terrain_rgb.py            # zoom 5-12

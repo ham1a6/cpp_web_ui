@@ -40,7 +40,8 @@ try:
     gdal.UseExceptions()
 except ImportError as e:
     print(json.dumps({'error': f'Missing dependency: {e}. '
-                               'Install: apt install python3-gdal python3-numpy'}))
+                               'Install (Debian/Ubuntu): apt install python3-gdal python3-numpy / '
+                               '(Rocky Linux/RHEL): dnf install gdal-python3 python3-numpy'}))
     sys.exit(1)
 
 # ---------------------------------------------------------------------------

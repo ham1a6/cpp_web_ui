@@ -21,7 +21,13 @@ target_include_directories(cpp_web_ui
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/third_party>
         $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(cpp_web_ui PUBLIC Threads::Threads rt)
+# librt is merged into glibc on modern systems (glibc >= 2.34, e.g. Rocky
+# Linux 9 / RHEL 9); only link it explicitly when a separate library exists.
+find_library(RT_LIBRARY rt)
+target_link_libraries(cpp_web_ui PUBLIC Threads::Threads)
+if(RT_LIBRARY)
+    target_link_libraries(cpp_web_ui PUBLIC ${RT_LIBRARY})
+endif()
 target_compile_options(cpp_web_ui PRIVATE -O2 -Wall)
 
 # Enable HTTPS client in cpp-httplib when OpenSSL is available.
