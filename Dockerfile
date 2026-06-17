@@ -107,12 +107,16 @@ CMD exec /app/simple_usage "${PORT}"
 # The map/ directory (≈ 19 GB) must be available on the host and is mounted
 # as a read-only volume at runtime — it is never baked into the image.
 ###############################################################################
-FROM rockylinux:9 AS tile-builder
+# Debian is used here because GDAL is available directly in the official
+# repositories (no EPEL equivalent needed). Switch to rockylinux:9 with
+# dnf install -y epel-release gdal python3-gdal python3-numpy if you
+# prefer a RHEL-family base for this stage.
+FROM debian:12-slim AS tile-builder
 
-# GDAL and Python bindings require EPEL
-RUN dnf install -y epel-release && \
-    dnf install -y gdal python3-gdal python3-numpy && \
-    dnf clean all
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        gdal-bin python3-gdal python3-numpy && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
